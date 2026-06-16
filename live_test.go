@@ -13,14 +13,11 @@ func TestLiveENASearchSmoke(t *testing.T) {
 	ctx := liveTestContext(t)
 
 	client := liveTestClient()
-	results, err := client.Search(ctx, SearchOptions{
+	results := liveENASearchWithRetry(t, ctx, client, SearchOptions{
 		Accessions: []string{"SRR3675520"},
 		Fields:     []string{"run_accession"},
 		Source:     SearchSourceENA,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	if len(results) != 1 {
 		t.Fatalf("len(results) = %d, want 1", len(results))
 	}
@@ -86,6 +83,32 @@ func liveTestContext(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+func liveENASearchWithRetry(t *testing.T, ctx context.Context, client *Client, options SearchOptions) []SearchResult {
+	t.Helper()
+
+	const maxAttempts = 2
+	var lastErr error
+	attempts := 0
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		attempts = attempt
+		results, err := client.Search(ctx, options)
+		if err == nil {
+			return results
+		}
+
+		lastErr = err
+		if ctx.Err() != nil {
+			break
+		}
+		if attempt < maxAttempts {
+			t.Logf("ENA live smoke attempt %d failed: %v; retrying once", attempt, err)
+		}
+	}
+
+	t.Fatalf("ENA live smoke failed after %d attempt(s): %v", attempts, lastErr)
+	return nil
 }
 
 func liveTestClient() *Client {
