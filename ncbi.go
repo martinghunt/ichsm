@@ -203,6 +203,14 @@ func normalizeNCBISummary(summary Record, resultType AccessionType) Record {
 		accession, version := splitAccessionVersion(accessionVersion)
 		record["accession"] = accession
 		record["version"] = version
+		record["description"] = firstNCBIString(summary, "assemblydescription", "assemblyname")
+		record["wgs_set"] = ncbiString(summary, "wgs")
+		record["assembly_name"] = ncbiString(summary, "assemblyname")
+		record["assembly_level"] = ncbiString(summary, "assemblystatus")
+		record["assembly_type"] = ncbiString(summary, "assemblytype")
+		record["coverage"] = ncbiString(summary, "coverage")
+		record["center_name"] = ncbiString(summary, "submitterorganization")
+		record["last_updated"] = firstNCBIString(summary, "lastupdatedate", "asmupdatedate")
 		record["scientific_name"] = firstNCBIString(summary, "speciesname", "organism")
 		record["tax_id"] = firstNCBIString(summary, "taxid", "speciestaxid")
 		record["sample_accession"] = ncbiString(summary, "biosampleaccn")

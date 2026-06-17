@@ -10,9 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add `ichsm search --count` to report how many ENA records a search would return without fetching the metadata records.
 - Warn before large JSON searches that fan out from a study/project or contig set, so users can choose TSV output for very large result sets.
+- Add an `ichsm_columns` column to `ichsm get_fields <data_type>` and `--sort ichsm_columns` to group fields by their lowest matching `-c` preset.
 
 ### Changed
 - Expand sample search default columns to include ENA's default sample fields plus study, taxonomy, collection date, and country metadata.
+- Include ENA/NCBI default descriptions and study accessions in default assembly, WGS, study, and run search columns where available.
+- Expand assembly `BIG` search columns with assembly status, naming, WGS, submitter, provenance, and update metadata.
 
 ### Fixed
 - Make `ichsm search` fail clearly when any requested accession cannot be searched or returns no results, instead of silently leaving that accession out of the output.

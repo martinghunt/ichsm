@@ -23,7 +23,7 @@ func TestQuerySampleAtRunLevel(t *testing.T) {
 		if got := query.Get("format"); got != "json" {
 			t.Fatalf("format = %q, want json", got)
 		}
-		if got := query.Get("fields"); got != "study_accession,secondary_study_accession,sample_accession,secondary_sample_accession,run_accession,instrument_platform,library_layout,fastq_ftp" {
+		if got := query.Get("fields"); got != "study_accession,secondary_study_accession,sample_accession,secondary_sample_accession,run_accession,description,instrument_platform,library_layout,fastq_ftp" {
 			t.Fatalf("fields = %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -65,7 +65,7 @@ func TestQueryStudy(t *testing.T) {
 		if got := query.Get("format"); got != "json" {
 			t.Fatalf("format = %q, want json", got)
 		}
-		if got := query.Get("fields"); got != "study_accession,secondary_study_accession,study_title,project_name" {
+		if got := query.Get("fields"); got != "study_accession,secondary_study_accession,description,study_title,project_name" {
 			t.Fatalf("fields = %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -104,7 +104,7 @@ func TestQueryWGSSet(t *testing.T) {
 		if got := query.Get("query"); got != "wgs_set=AGQU01" {
 			t.Fatalf("query = %q", got)
 		}
-		if got := query.Get("fields"); got != "accession,wgs_set,assembly_accession,sample_accession,run_accession,sequence_version,scientific_name,tax_id" {
+		if got := query.Get("fields"); got != "accession,wgs_set,assembly_accession,sample_accession,run_accession,sequence_version,description,study_accession,scientific_name,tax_id" {
 			t.Fatalf("fields = %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -403,6 +403,45 @@ func TestResolveSearchLevelRejectsUnsupportedCombination(t *testing.T) {
 	_, err := ResolveSearchLevel(AccessionTypeRun, AccessionTypeSample)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestFieldPresetsAreNested(t *testing.T) {
+	for accessionType, presets := range fieldPresets {
+		for _, field := range presets[FieldPresetSmall] {
+			if !stringSliceContains(presets[FieldPresetDefault], field) {
+				t.Fatalf("%s SMALL field %q is not in DEFAULT", accessionType, field)
+			}
+		}
+		for _, field := range presets[FieldPresetDefault] {
+			if !stringSliceContains(presets[FieldPresetBig], field) {
+				t.Fatalf("%s DEFAULT field %q is not in BIG", accessionType, field)
+			}
+		}
+	}
+}
+
+func TestFieldPresetLevelForResult(t *testing.T) {
+	tests := []struct {
+		resultType string
+		field      string
+		wantLevel  string
+		wantOK     bool
+	}{
+		{resultType: "read_run", field: "run_accession", wantLevel: FieldPresetSmall, wantOK: true},
+		{resultType: "read_run", field: "fastq_ftp", wantLevel: FieldPresetDefault, wantOK: true},
+		{resultType: "read_run", field: "center_name", wantLevel: FieldPresetBig, wantOK: true},
+		{resultType: "read_run", field: "age", wantLevel: FieldPresetAll, wantOK: true},
+		{resultType: "analysis", field: "analysis_accession"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.resultType+"/"+tt.field, func(t *testing.T) {
+			gotLevel, gotOK := FieldPresetLevelForResult(tt.resultType, tt.field)
+			if gotLevel != tt.wantLevel || gotOK != tt.wantOK {
+				t.Fatalf("FieldPresetLevelForResult() = %q, %v; want %q, %v", gotLevel, gotOK, tt.wantLevel, tt.wantOK)
+			}
+		})
 	}
 }
 

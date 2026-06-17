@@ -21,10 +21,24 @@ var urlSearchData = map[AccessionType]searchEndpoint{
 }
 
 var assemblySmall = []string{"accession", "sample_accession", "run_accession", "version"}
-var assemblyDefault = append(copyStrings(assemblySmall), "scientific_name", "tax_id")
+var assemblyDefault = append(copyStrings(assemblySmall), "description", "study_accession", "scientific_name", "tax_id")
+var assemblyBig = append(copyStrings(assemblyDefault),
+	"wgs_set",
+	"assembly_name",
+	"assembly_level",
+	"assembly_type",
+	"assembly_software",
+	"coverage",
+	"genome_representation",
+	"center_name",
+	"country",
+	"strain",
+	"isolate",
+	"last_updated",
+)
 
 var wgsSetSmall = []string{"accession", "wgs_set", "assembly_accession", "sample_accession", "run_accession", "sequence_version"}
-var wgsSetDefault = append(copyStrings(wgsSetSmall), "scientific_name", "tax_id")
+var wgsSetDefault = append(copyStrings(wgsSetSmall), "description", "study_accession", "scientific_name", "tax_id")
 
 var contigSetSmall = []string{"accession", "sample_accession", "sequence_version"}
 var contigSetDefault = append(copyStrings(contigSetSmall), "description", "scientific_name", "tax_id", "study_accession")
@@ -54,6 +68,7 @@ var studySmall = []string{
 	"secondary_study_accession",
 }
 var studyDefault = append(copyStrings(studySmall),
+	"description",
 	"study_title",
 	"project_name",
 )
@@ -93,7 +108,7 @@ var runSmall = []string{
 	"secondary_sample_accession",
 	"run_accession",
 }
-var runDefault = append(copyStrings(runSmall), "instrument_platform", "library_layout", "fastq_ftp")
+var runDefault = append(copyStrings(runSmall), "description", "instrument_platform", "library_layout", "fastq_ftp")
 var runBig = append(copyStrings(runDefault),
 	"center_name",
 	"broker_name",
@@ -107,7 +122,7 @@ var fieldPresets = map[AccessionType]map[string][]string{
 	AccessionTypeAssembly: {
 		"SMALL":   assemblySmall,
 		"DEFAULT": assemblyDefault,
-		"BIG":     assemblyDefault,
+		"BIG":     assemblyBig,
 	},
 	AccessionTypeContigSet: {
 		"SMALL":   contigSetSmall,

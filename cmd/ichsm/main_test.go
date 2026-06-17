@@ -262,7 +262,7 @@ func TestRunSearchWithLevel(t *testing.T) {
 		if got := query.Get("query"); got != "sample_accession=SAMN05276490 OR secondary_sample_accession=SAMN05276490" {
 			t.Fatalf("query = %q", got)
 		}
-		if got := query.Get("fields"); got != "study_accession,secondary_study_accession,sample_accession,secondary_sample_accession,run_accession,instrument_platform,library_layout,fastq_ftp" {
+		if got := query.Get("fields"); got != "study_accession,secondary_study_accession,sample_accession,secondary_sample_accession,run_accession,description,instrument_platform,library_layout,fastq_ftp" {
 			t.Fatalf("fields = %q", got)
 		}
 		_, _ = w.Write([]byte(`[{"run_accession":"ERR123456","fastq_ftp":"ftp.sra.ebi.ac.uk/file.fastq.gz"}]`))
@@ -278,8 +278,8 @@ func TestRunSearchWithLevel(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
-	const want = "input_accession\tstudy_accession\tsecondary_study_accession\tsample_accession\tsecondary_sample_accession\trun_accession\tinstrument_platform\tlibrary_layout\tfastq_ftp\n" +
-		"SAMN05276490\t.\t.\t.\t.\tERR123456\t.\t.\tftp.sra.ebi.ac.uk/file.fastq.gz\n"
+	const want = "input_accession\tstudy_accession\tsecondary_study_accession\tsample_accession\tsecondary_sample_accession\trun_accession\tdescription\tinstrument_platform\tlibrary_layout\tfastq_ftp\n" +
+		"SAMN05276490\t.\t.\t.\t.\tERR123456\t.\t.\t.\tftp.sra.ebi.ac.uk/file.fastq.gz\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
@@ -476,10 +476,10 @@ func TestRunSearchWGSSetWritesTSV(t *testing.T) {
 		if got := query.Get("query"); got != "wgs_set=AGQU01" {
 			t.Fatalf("query = %q", got)
 		}
-		if got := query.Get("fields"); got != "accession,wgs_set,assembly_accession,sample_accession,run_accession,sequence_version,scientific_name,tax_id" {
+		if got := query.Get("fields"); got != "accession,wgs_set,assembly_accession,sample_accession,run_accession,sequence_version,description,study_accession,scientific_name,tax_id" {
 			t.Fatalf("fields = %q", got)
 		}
-		_, _ = w.Write([]byte(`[{"accession":"AGQU01000000","wgs_set":"AGQU01","assembly_accession":"GCA_000231155","sequence_version":"1","scientific_name":"Mycobacteroides abscessus 47J26","tax_id":"1087483","sample_accession":"SAMN02471593","run_accession":""}]`))
+		_, _ = w.Write([]byte(`[{"accession":"AGQU01000000","wgs_set":"AGQU01","assembly_accession":"GCA_000231155","sequence_version":"1","description":"test contig set","study_accession":"PRJNA123456","scientific_name":"Mycobacteroides abscessus 47J26","tax_id":"1087483","sample_accession":"SAMN02471593","run_accession":""}]`))
 	}))
 	defer server.Close()
 
@@ -492,8 +492,8 @@ func TestRunSearchWGSSetWritesTSV(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
-	const want = "input_accession\taccession\twgs_set\tassembly_accession\tsample_accession\trun_accession\tsequence_version\tscientific_name\ttax_id\n" +
-		"AGQU00000000.1\tAGQU01000000\tAGQU01\tGCA_000231155\tSAMN02471593\t.\t1\tMycobacteroides abscessus 47J26\t1087483\n"
+	const want = "input_accession\taccession\twgs_set\tassembly_accession\tsample_accession\trun_accession\tsequence_version\tdescription\tstudy_accession\tscientific_name\ttax_id\n" +
+		"AGQU00000000.1\tAGQU01000000\tAGQU01\tGCA_000231155\tSAMN02471593\t.\t1\ttest contig set\tPRJNA123456\tMycobacteroides abscessus 47J26\t1087483\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
@@ -513,7 +513,7 @@ func TestRunSearchFallsBackToNCBIAssembly(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"esearchresult":{"idlist":["11968211"]}}`))
 		case "/esummary.fcgi":
-			_, _ = w.Write([]byte(`{"result":{"uids":["11968211"],"11968211":{"assemblyaccession":"GCF_000001405.40","speciesname":"Homo sapiens","taxid":9606,"biosampleaccn":"SAMN1"}}}`))
+			_, _ = w.Write([]byte(`{"result":{"uids":["11968211"],"11968211":{"assemblyaccession":"GCF_000001405.40","assemblydescription":"Genome Reference Consortium Human Build 38 patch release 14 (GRCh38.p14)","speciesname":"Homo sapiens","taxid":9606,"biosampleaccn":"SAMN1","rs_bioprojects":[{"bioprojectaccn":"PRJNA168"}]}}}`))
 		default:
 			t.Fatalf("path = %q", r.URL.Path)
 		}
@@ -529,8 +529,8 @@ func TestRunSearchFallsBackToNCBIAssembly(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
-	const want = "input_accession\taccession\tsample_accession\trun_accession\tversion\tscientific_name\ttax_id\n" +
-		"GCF_000001405.40\tGCF_000001405\tSAMN1\t.\t40\tHomo sapiens\t9606\n"
+	const want = "input_accession\taccession\tsample_accession\trun_accession\tversion\tdescription\tstudy_accession\tscientific_name\ttax_id\n" +
+		"GCF_000001405.40\tGCF_000001405\tSAMN1\t.\t40\tGenome Reference Consortium Human Build 38 patch release 14 (GRCh38.p14)\tPRJNA168\tHomo sapiens\t9606\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
@@ -851,7 +851,38 @@ func TestRunGetFieldsForDataType(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
-	const want = "columnId\tdescription\nrun_accession\taccession number\n"
+	const want = "columnId\tdescription\tichsm_columns\nrun_accession\taccession number\tSMALL\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestRunGetFieldsForDataTypeSortsByICHSMColumns(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/searchFields" {
+			t.Fatalf("path = %q, want /searchFields", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("result"); got != "read_run" {
+			t.Fatalf("result = %q, want read_run", got)
+		}
+		_, _ = w.Write([]byte("columnId\tdescription\nage\tAge when sampled\ncenter_name\tSubmitting center\nfastq_ftp\tFASTQ URLs\nrun_accession\taccession number\n"))
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"get_fields", "read_run", "--sort", "ichsm_columns"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "columnId\tdescription\tichsm_columns\n" +
+		"run_accession\taccession number\tSMALL\n" +
+		"fastq_ftp\tFASTQ URLs\tDEFAULT\n" +
+		"center_name\tSubmitting center\tBIG\n" +
+		"age\tAge when sampled\tALL\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}

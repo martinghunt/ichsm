@@ -224,6 +224,7 @@ func parseSearchSource(source string) (ichsm.SearchSource, error) {
 func newGetFieldsCommand() *cobra.Command {
 	var debug bool
 	outfmt := outputFormatTSV
+	sortBy := ""
 
 	cmd := &cobra.Command{
 		Use:   "get_fields [data_type]",
@@ -233,6 +234,13 @@ func newGetFieldsCommand() *cobra.Command {
 			parsedOutfmt, err := parseOutputFormat(outfmt, false)
 			if err != nil {
 				return err
+			}
+			parsedSort, err := parseGetFieldsSort(sortBy)
+			if err != nil {
+				return err
+			}
+			if parsedSort != "" && len(args) == 0 {
+				return fmt.Errorf("--sort is supported only with get_fields <data_type>")
 			}
 
 			client := newClient()
@@ -250,6 +258,9 @@ func newGetFieldsCommand() *cobra.Command {
 					log.Printf("getting fields for %s", args[0])
 				}
 				text, err = client.GetAllowedFields(cmd.Context(), args[0])
+				if err == nil {
+					text = appendICHSMColumnsColumn(text, args[0], parsedSort)
+				}
 			}
 			if err != nil {
 				return err
@@ -262,7 +273,19 @@ func newGetFieldsCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&debug, "debug", false, "More verbose logging")
 	cmd.Flags().StringVar(&outfmt, "outfmt", outfmt, "Output format: table or tsv")
+	cmd.Flags().StringVar(&sortBy, "sort", sortBy, "Sort field rows: ichsm_columns")
 	return cmd
+}
+
+func parseGetFieldsSort(sortBy string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "", "none":
+		return "", nil
+	case "ichsm_columns", "preset", "columns":
+		return "ichsm_columns", nil
+	default:
+		return "", fmt.Errorf("unsupported --sort %q; expected ichsm_columns", sortBy)
+	}
 }
 
 func writeTextWithTrailingNewline(out io.Writer, text string) error {
@@ -310,6 +333,74 @@ func appendICHSMSearchColumn(text string) string {
 		out = append(out, row.line+"\t"+yesNo(row.supported))
 	}
 	return strings.Join(out, "\n") + "\n"
+}
+
+func appendICHSMColumnsColumn(text string, resultType string, sortBy string) string {
+	rows := tsvTextRows(text)
+	if len(rows) == 0 {
+		return text
+	}
+
+	type fieldRow struct {
+		fields []string
+		level  string
+		rank   int
+	}
+
+	fieldRows := make([]fieldRow, 0, len(rows)-1)
+	for _, row := range rows[1:] {
+		level := "."
+		rank := ichsmColumnPresetRank(level)
+		if len(row) > 0 {
+			if presetLevel, ok := ichsm.FieldPresetLevelForResult(resultType, row[0]); ok {
+				level = presetLevel
+				rank = ichsmColumnPresetRank(level)
+			}
+		}
+		fieldRows = append(fieldRows, fieldRow{
+			fields: append([]string(nil), row...),
+			level:  level,
+			rank:   rank,
+		})
+	}
+
+	if sortBy == "ichsm_columns" {
+		sort.SliceStable(fieldRows, func(i int, j int) bool {
+			if fieldRows[i].rank != fieldRows[j].rank {
+				return fieldRows[i].rank < fieldRows[j].rank
+			}
+			return fieldRows[i].fields[0] < fieldRows[j].fields[0]
+		})
+	}
+
+	outRows := make([][]string, 0, len(rows))
+	header := append([]string(nil), rows[0]...)
+	header = append(header, "ichsm_columns")
+	outRows = append(outRows, header)
+	for _, row := range fieldRows {
+		out := append([]string(nil), row.fields...)
+		out = append(out, row.level)
+		outRows = append(outRows, out)
+	}
+
+	var out strings.Builder
+	_ = writeDelimitedRows(&out, outRows, "\t")
+	return out.String()
+}
+
+func ichsmColumnPresetRank(level string) int {
+	switch level {
+	case ichsm.FieldPresetSmall:
+		return 0
+	case ichsm.FieldPresetDefault:
+		return 1
+	case ichsm.FieldPresetBig:
+		return 2
+	case ichsm.FieldPresetAll:
+		return 3
+	default:
+		return 4
+	}
 }
 
 func ichsmSearchSupportsResult(resultType string) bool {
