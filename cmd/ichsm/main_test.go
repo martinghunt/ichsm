@@ -838,7 +838,7 @@ func TestRunGetFieldsForDataType(t *testing.T) {
 		if got := r.URL.Query().Get("result"); got != "read_run" {
 			t.Fatalf("result = %q, want read_run", got)
 		}
-		_, _ = w.Write([]byte("columnId\tdescription\nrun_accession\taccession number\n"))
+		_, _ = w.Write([]byte("columnId\tdescription\ttype\nrun_accession\taccession number\ttext\n"))
 	}))
 	defer server.Close()
 
@@ -851,7 +851,7 @@ func TestRunGetFieldsForDataType(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
-	const want = "columnId\tdescription\tichsm_columns\nrun_accession\taccession number\tSMALL\n"
+	const want = "columnId\ttype\tichsm_columns\tdescription\nrun_accession\ttext\tSMALL\taccession number\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
@@ -878,12 +878,12 @@ func TestRunGetFieldsForDataTypeSortsByICHSMColumns(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
-	const want = "columnId\tdescription\ttype\tichsm_columns\n" +
-		"run_accession\taccession number\ttext\tSMALL\n" +
-		"fastq_ftp\tFASTQ URLs\ttext\tDEFAULT\n" +
-		"center_name\tSubmitting center\ttext\tBIG\n" +
-		"age\tAge when sampled\ttext\tALL\n" +
-		"location_end\t\tlatlon\tALL\n"
+	const want = "columnId\ttype\tichsm_columns\tdescription\n" +
+		"run_accession\ttext\tSMALL\taccession number\n" +
+		"fastq_ftp\ttext\tDEFAULT\tFASTQ URLs\n" +
+		"center_name\ttext\tBIG\tSubmitting center\n" +
+		"age\ttext\tALL\tAge when sampled\n" +
+		"location_end\tlatlon\tALL\t\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}

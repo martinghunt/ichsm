@@ -375,13 +375,9 @@ func appendICHSMColumnsColumn(text string, resultType string, sortBy string) str
 	}
 
 	outRows := make([][]string, 0, len(rows))
-	header := append([]string(nil), rows[0]...)
-	header = append(header, "ichsm_columns")
-	outRows = append(outRows, header)
+	outRows = append(outRows, getFieldsOutputHeader(rows[0]))
 	for _, row := range fieldRows {
-		out := append([]string(nil), row.fields...)
-		out = append(out, row.level)
-		outRows = append(outRows, out)
+		outRows = append(outRows, getFieldsOutputRow(rows[0], row.fields, row.level))
 	}
 
 	var out strings.Builder
@@ -389,9 +385,31 @@ func appendICHSMColumnsColumn(text string, resultType string, sortBy string) str
 	return out.String()
 }
 
+func getFieldsOutputHeader(header []string) []string {
+	if isENASearchFieldsHeader(header) {
+		return []string{"columnId", "type", "ichsm_columns", "description"}
+	}
+	out := append([]string(nil), header...)
+	out = append(out, "ichsm_columns")
+	return out
+}
+
+func getFieldsOutputRow(header []string, row []string, level string) []string {
+	if isENASearchFieldsHeader(header) {
+		return []string{row[0], row[2], level, row[1]}
+	}
+	out := append([]string(nil), row...)
+	out = append(out, level)
+	return out
+}
+
+func isENASearchFieldsHeader(header []string) bool {
+	return len(header) == 3 && header[0] == "columnId" && header[1] == "description" && header[2] == "type"
+}
+
 func normalizeGetFieldsRow(header []string, row []string) []string {
 	out := append([]string(nil), row...)
-	if len(header) == 3 && sameStringSet(header, []string{"columnId", "description", "type"}) && len(out) == 2 && looksLikeENAFieldType(out[1]) {
+	if isENASearchFieldsHeader(header) && len(out) == 2 && looksLikeENAFieldType(out[1]) {
 		out = []string{out[0], "", out[1]}
 	}
 	for len(out) < len(header) {
