@@ -316,10 +316,10 @@ func TestQuerySecondaryStudyAtSampleLevel(t *testing.T) {
 			if got := query.Get("query"); got != "study_accession=PRJEB1787" {
 				t.Fatalf("sample query = %q", got)
 			}
-			if got := query.Get("fields"); got != "secondary_sample_accession,collection_date,country" {
+			if got := query.Get("fields"); got != "sample_accession,description,secondary_sample_accession,study_accession,scientific_name,tax_id,collection_date,country" {
 				t.Fatalf("sample fields = %q", got)
 			}
-			_, _ = w.Write([]byte(`[{"secondary_sample_accession":"ERS478017","country":"France"}]`))
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMEA123","description":"sample description","secondary_sample_accession":"ERS478017","study_accession":"PRJEB1787","scientific_name":"marine metagenome","tax_id":"408172","country":"France"}]`))
 		default:
 			t.Fatalf("result = %q", query.Get("result"))
 		}

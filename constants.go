@@ -72,7 +72,12 @@ var sampleSmall = []string{
 	"sample_accession",
 }
 var sampleDefault = []string{
+	"sample_accession",
+	"description",
 	"secondary_sample_accession",
+	"study_accession",
+	"scientific_name",
+	"tax_id",
 	"collection_date",
 	"country",
 }

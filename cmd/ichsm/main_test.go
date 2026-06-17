@@ -26,10 +26,10 @@ func TestRunSearchWritesTSV(t *testing.T) {
 		if got := query.Get("query"); got != "sample_accession=SAMN05276490 OR secondary_sample_accession=SAMN05276490" {
 			t.Fatalf("query = %q", got)
 		}
-		if got := query.Get("fields"); got != "secondary_sample_accession,collection_date,country" {
+		if got := query.Get("fields"); got != "sample_accession,description,secondary_sample_accession,study_accession,scientific_name,tax_id,collection_date,country" {
 			t.Fatalf("fields = %q", got)
 		}
-		_, _ = w.Write([]byte(`[{"secondary_sample_accession":"SRS123456","collection_date":"2016-01-01","country":""}]`))
+		_, _ = w.Write([]byte(`[{"sample_accession":"SAMN05276490","description":"sample description","secondary_sample_accession":"SRS123456","study_accession":"PRJNA302362","scientific_name":"Mycobacterium tuberculosis","tax_id":"1773","collection_date":"2016-01-01","country":""}]`))
 	}))
 	defer server.Close()
 
@@ -42,8 +42,8 @@ func TestRunSearchWritesTSV(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
-	const want = "input_accession\tsecondary_sample_accession\tcollection_date\tcountry\n" +
-		"SAMN05276490\tSRS123456\t2016-01-01\t.\n"
+	const want = "input_accession\tsample_accession\tdescription\tsecondary_sample_accession\tstudy_accession\tscientific_name\ttax_id\tcollection_date\tcountry\n" +
+		"SAMN05276490\tSAMN05276490\tsample description\tSRS123456\tPRJNA302362\tMycobacterium tuberculosis\t1773\t2016-01-01\t.\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
@@ -243,8 +243,8 @@ func TestRunSearchWritesTable(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
-	const want = "input_accession  secondary_sample_accession  collection_date  country\n" +
-		"SAMN05276490     SRS123456                   2016-01-01       .\n"
+	const want = "input_accession  sample_accession  description  secondary_sample_accession  study_accession  scientific_name  tax_id  collection_date  country\n" +
+		"SAMN05276490     .                 .            SRS123456                   .                .                .       2016-01-01       .\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
