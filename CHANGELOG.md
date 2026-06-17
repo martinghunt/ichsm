@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-17
+
 ### Added
 - Add `ichsm search --count` to report how many ENA records a search would return without fetching the metadata records.
 - Warn before large JSON searches that fan out from a study/project or contig set, so users can choose TSV output for very large result sets.
@@ -16,10 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expand sample search default columns to include ENA's default sample fields plus study, taxonomy, collection date, and country metadata.
 - Include ENA/NCBI default descriptions and study accessions in default assembly, WGS, study, and run search columns where available.
 - Expand assembly `BIG` search columns with assembly status, naming, WGS, submitter, provenance, and update metadata.
+- Order annotated `ichsm get_fields <data_type>` output as `columnId`, `type`, `ichsm_columns`, then `description`.
 
 ### Fixed
 - Make `ichsm search` fail clearly when any requested accession cannot be searched or returns no results, instead of silently leaving that accession out of the output.
 - Include columns found in later records when `ichsm search --columns ALL` writes TSV or table output; records without a unioned column now show `null` for that cell.
+- Preserve empty description cells in annotated `ichsm get_fields <data_type>` TSV output so every row has the same field count.
+- Retry flaky ENA live smoke tests to reduce release-check noise from transient upstream failures.
 
 ## [0.3.0] - 2026-06-10
 
@@ -61,7 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release `v0.1.0`, before changelog tracking started in this file.
 
-[Unreleased]: https://github.com/martinghunt/ichsm/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/martinghunt/ichsm/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/martinghunt/ichsm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/martinghunt/ichsm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/martinghunt/ichsm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/martinghunt/ichsm/releases/tag/v0.1.0
