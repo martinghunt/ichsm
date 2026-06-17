@@ -349,6 +349,7 @@ func appendICHSMColumnsColumn(text string, resultType string, sortBy string) str
 
 	fieldRows := make([]fieldRow, 0, len(rows)-1)
 	for _, row := range rows[1:] {
+		row = normalizeGetFieldsRow(rows[0], row)
 		level := "."
 		rank := ichsmColumnPresetRank(level)
 		if len(row) > 0 {
@@ -386,6 +387,26 @@ func appendICHSMColumnsColumn(text string, resultType string, sortBy string) str
 	var out strings.Builder
 	_ = writeDelimitedRows(&out, outRows, "\t")
 	return out.String()
+}
+
+func normalizeGetFieldsRow(header []string, row []string) []string {
+	out := append([]string(nil), row...)
+	if len(header) == 3 && sameStringSet(header, []string{"columnId", "description", "type"}) && len(out) == 2 && looksLikeENAFieldType(out[1]) {
+		out = []string{out[0], "", out[1]}
+	}
+	for len(out) < len(header) {
+		out = append(out, "")
+	}
+	return out
+}
+
+func looksLikeENAFieldType(value string) bool {
+	switch value {
+	case "boolean", "controlled value", "date", "indexed", "latlon", "list", "number", "taxonomy", "text":
+		return true
+	default:
+		return false
+	}
 }
 
 func ichsmColumnPresetRank(level string) int {
