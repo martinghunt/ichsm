@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/martinghunt/ichsm"
@@ -28,7 +27,7 @@ func TestParseReadsOutfmtTransposedFormats(t *testing.T) {
 }
 
 func TestRunReadsWritesManifest(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -43,8 +42,7 @@ func TestRunReadsWritesManifest(t *testing.T) {
 			t.Fatalf("fields = %q", got)
 		}
 		_, _ = w.Write([]byte(`[{"run_accession":"SRR3675520","fastq_ftp":"ftp.sra.ebi.ac.uk/read_1.fastq.gz;ftp.sra.ebi.ac.uk/read_2.fastq.gz","fastq_md5":"abc;def","fastq_bytes":"10;20"}]`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -64,13 +62,7 @@ func TestRunReadsWritesManifest(t *testing.T) {
 }
 
 func TestRunReadsWritesTable(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/search" {
-			t.Fatalf("path = %q, want /search", r.URL.Path)
-		}
-		_, _ = w.Write([]byte(`[{"run_accession":"SRR3675520","fastq_ftp":"f.gz","fastq_md5":"abc","fastq_bytes":"10"}]`))
-	}))
-	defer server.Close()
+	server := withPathResponseServer(t, "/search", `[{"run_accession":"SRR3675520","fastq_ftp":"f.gz","fastq_md5":"abc","fastq_bytes":"10"}]`)
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -89,7 +81,7 @@ func TestRunReadsWritesTable(t *testing.T) {
 }
 
 func TestRunReadsWritesWget(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -101,8 +93,7 @@ func TestRunReadsWritesWget(t *testing.T) {
 			t.Fatalf("query = %q", got)
 		}
 		_, _ = w.Write([]byte(`[{"run_accession":"ERR123456","fastq_ftp":"ftp.sra.ebi.ac.uk/file.fastq.gz","fastq_md5":"abc","fastq_bytes":"10"}]`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -120,13 +111,7 @@ func TestRunReadsWritesWget(t *testing.T) {
 }
 
 func TestRunReadsWritesMD5(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/search" {
-			t.Fatalf("path = %q, want /search", r.URL.Path)
-		}
-		_, _ = w.Write([]byte(`[{"run_accession":"ERR123456","fastq_ftp":"ftp.sra.ebi.ac.uk/file.fastq.gz","fastq_md5":"abc","fastq_bytes":"10"}]`))
-	}))
-	defer server.Close()
+	server := withPathResponseServer(t, "/search", `[{"run_accession":"ERR123456","fastq_ftp":"ftp.sra.ebi.ac.uk/file.fastq.gz","fastq_md5":"abc","fastq_bytes":"10"}]`)
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {

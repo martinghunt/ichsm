@@ -2,18 +2,11 @@ package main
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
 func TestRunGetFieldsListsDataTypes(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/results" {
-			t.Fatalf("path = %q, want /results", r.URL.Path)
-		}
-		_, _ = w.Write([]byte("resultId\tdescription\tprimaryAccessionType\ntls_set\tTargeted locus study contig sets\taccession\nsample\tSamples\tsample_accession\nanalysis\tAnalyses\tanalysis_accession\nwgs_set\tGenome assembly contig set (WGS)\taccession\nread_run\tRaw reads\trun_accession\n"))
-	}))
-	defer server.Close()
+	server := withPathResponseServer(t, "/results", "resultId\tdescription\tprimaryAccessionType\ntls_set\tTargeted locus study contig sets\taccession\nsample\tSamples\tsample_accession\nanalysis\tAnalyses\tanalysis_accession\nwgs_set\tGenome assembly contig set (WGS)\taccession\nread_run\tRaw reads\trun_accession\n")
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -36,7 +29,7 @@ func TestRunGetFieldsListsDataTypes(t *testing.T) {
 }
 
 func TestRunGetFieldsForDataType(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/searchFields" {
 			t.Fatalf("path = %q, want /searchFields", r.URL.Path)
 		}
@@ -44,8 +37,7 @@ func TestRunGetFieldsForDataType(t *testing.T) {
 			t.Fatalf("result = %q, want read_run", got)
 		}
 		_, _ = w.Write([]byte("columnId\tdescription\ttype\nrun_accession\taccession number\ttext\n"))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -63,7 +55,7 @@ func TestRunGetFieldsForDataType(t *testing.T) {
 }
 
 func TestRunGetFieldsForDataTypeSortsByICHSMColumns(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/searchFields" {
 			t.Fatalf("path = %q, want /searchFields", r.URL.Path)
 		}
@@ -71,8 +63,7 @@ func TestRunGetFieldsForDataTypeSortsByICHSMColumns(t *testing.T) {
 			t.Fatalf("result = %q, want read_run", got)
 		}
 		_, _ = w.Write([]byte("columnId\tdescription\ttype\nage\tAge when sampled\ttext\ncenter_name\tSubmitting center\ttext\nfastq_ftp\tFASTQ URLs\ttext\nlocation_end\tlatlon\nrun_accession\taccession number\ttext\n"))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -95,13 +86,7 @@ func TestRunGetFieldsForDataTypeSortsByICHSMColumns(t *testing.T) {
 }
 
 func TestRunGetFieldsWritesTable(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/results" {
-			t.Fatalf("path = %q, want /results", r.URL.Path)
-		}
-		_, _ = w.Write([]byte("resultId\tdescription\nsample\tSamples\nanalysis\tAnalyses\n"))
-	}))
-	defer server.Close()
+	server := withPathResponseServer(t, "/results", "resultId\tdescription\nsample\tSamples\nanalysis\tAnalyses\n")
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {

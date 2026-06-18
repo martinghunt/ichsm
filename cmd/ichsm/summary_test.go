@@ -2,13 +2,12 @@ package main
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
 func TestRunSummaryWritesTSV(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/search":
 			query := r.URL.Query()
@@ -104,8 +103,7 @@ func TestRunSummaryWritesTSV(t *testing.T) {
 		default:
 			t.Fatalf("path = %q", r.URL.Path)
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {

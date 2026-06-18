@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -14,7 +13,7 @@ import (
 )
 
 func TestRunSearchWritesTSV(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -29,8 +28,7 @@ func TestRunSearchWritesTSV(t *testing.T) {
 			t.Fatalf("fields = %q", got)
 		}
 		_, _ = w.Write([]byte(`[{"sample_accession":"SAMN05276490","description":"sample description","secondary_sample_accession":"SRS123456","study_accession":"PRJNA302362","scientific_name":"Mycobacterium tuberculosis","tax_id":"1773","collection_date":"2016-01-01","country":""}]`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -60,7 +58,7 @@ func TestRunSearchFailsInsteadOfWritingPartialOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -73,8 +71,7 @@ func TestRunSearchFailsInsteadOfWritingPartialOutput(t *testing.T) {
 		default:
 			t.Fatalf("query = %q", query)
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -90,13 +87,7 @@ func TestRunSearchFailsInsteadOfWritingPartialOutput(t *testing.T) {
 }
 
 func TestRunSearchFailsWhenNoRecordsReturned(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/search" {
-			t.Fatalf("path = %q, want /search", r.URL.Path)
-		}
-		_, _ = w.Write([]byte(`[]`))
-	}))
-	defer server.Close()
+	server := withPathResponseServer(t, "/search", `[]`)
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -113,7 +104,7 @@ func TestRunSearchFailsWhenNoRecordsReturned(t *testing.T) {
 
 func TestWarnLargeJSONSearchCountsForProjectRun(t *testing.T) {
 	var sawCount bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/search":
 			_, _ = w.Write([]byte(`[{"study_accession":"PRJEB1787"}]`))
@@ -130,8 +121,7 @@ func TestWarnLargeJSONSearchCountsForProjectRun(t *testing.T) {
 		default:
 			t.Fatalf("path = %q", r.URL.Path)
 		}
-	}))
-	defer server.Close()
+	})
 
 	client := &ichsm.Client{
 		BaseURL:               server.URL + "/",
@@ -155,11 +145,10 @@ func TestWarnLargeJSONSearchCountsForProjectRun(t *testing.T) {
 
 func TestWarnLargeJSONSearchCountsSkipsSampleRun(t *testing.T) {
 	var requested bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		requested = true
 		http.Error(w, "unexpected request", http.StatusInternalServerError)
-	}))
-	defer server.Close()
+	})
 
 	client := &ichsm.Client{
 		BaseURL:               server.URL + "/",
@@ -233,7 +222,7 @@ func TestNeedsJSONCountPreflight(t *testing.T) {
 }
 
 func TestRunSearchWritesTable(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -242,8 +231,7 @@ func TestRunSearchWritesTable(t *testing.T) {
 			t.Fatalf("result = %q, want sample", got)
 		}
 		_, _ = w.Write([]byte(`[{"secondary_sample_accession":"SRS123456","collection_date":"2016-01-01","country":""}]`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -262,7 +250,7 @@ func TestRunSearchWritesTable(t *testing.T) {
 }
 
 func TestRunSearchWritesTTable(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -274,8 +262,7 @@ func TestRunSearchWritesTTable(t *testing.T) {
 			t.Fatalf("fields = %q", got)
 		}
 		_, _ = w.Write([]byte(`[{"sample_accession":"SAMN05276490","description":"sample description"}]`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -295,7 +282,7 @@ func TestRunSearchWritesTTable(t *testing.T) {
 }
 
 func TestRunSearchWritesTTSV(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -307,8 +294,7 @@ func TestRunSearchWritesTTSV(t *testing.T) {
 			t.Fatalf("fields = %q", got)
 		}
 		_, _ = w.Write([]byte(`[{"sample_accession":"SAMN05276490","description":"sample description"}]`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -346,7 +332,7 @@ func TestParseOutputFormatTransposedFormats(t *testing.T) {
 }
 
 func TestRunSearchWithLevel(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -361,8 +347,7 @@ func TestRunSearchWithLevel(t *testing.T) {
 			t.Fatalf("fields = %q", got)
 		}
 		_, _ = w.Write([]byte(`[{"run_accession":"ERR123456","fastq_ftp":"ftp.sra.ebi.ac.uk/file.fastq.gz"}]`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -381,7 +366,7 @@ func TestRunSearchWithLevel(t *testing.T) {
 }
 
 func TestRunSearchWritesJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -393,8 +378,7 @@ func TestRunSearchWritesJSON(t *testing.T) {
 			t.Fatalf("query = %q", got)
 		}
 		_, _ = w.Write([]byte(`[{"run_accession":"ERR123456","fastq_ftp":"ftp.sra.ebi.ac.uk/file.fastq.gz"}]`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -418,7 +402,7 @@ func TestRunSearchWritesJSON(t *testing.T) {
 }
 
 func TestRunSearchCountWritesTSV(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/search":
 			query := r.URL.Query()
@@ -444,8 +428,7 @@ func TestRunSearchCountWritesTSV(t *testing.T) {
 		default:
 			t.Fatalf("path = %q", r.URL.Path)
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -464,7 +447,7 @@ func TestRunSearchCountWritesTSV(t *testing.T) {
 }
 
 func TestRunSearchCountWritesJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/count" {
 			t.Fatalf("path = %q, want /count", r.URL.Path)
 		}
@@ -476,8 +459,7 @@ func TestRunSearchCountWritesJSON(t *testing.T) {
 			t.Fatalf("count query = %q", got)
 		}
 		_, _ = w.Write([]byte(`{"count":"1"}`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -511,7 +493,7 @@ func TestRunSearchCountRejectsNCBISource(t *testing.T) {
 }
 
 func TestRunSearchWGSSetWritesTSV(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -526,8 +508,7 @@ func TestRunSearchWGSSetWritesTSV(t *testing.T) {
 			t.Fatalf("fields = %q", got)
 		}
 		_, _ = w.Write([]byte(`[{"accession":"AGQU01000000","wgs_set":"AGQU01","assembly_accession":"GCA_000231155","sequence_version":"1","description":"test contig set","study_accession":"PRJNA123456","scientific_name":"Mycobacteroides abscessus 47J26","tax_id":"1087483","sample_accession":"SAMN02471593","run_accession":""}]`))
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -546,7 +527,7 @@ func TestRunSearchWGSSetWritesTSV(t *testing.T) {
 }
 
 func TestRunSearchFallsBackToNCBIAssembly(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/search":
 			if got := r.URL.Query().Get("result"); got != "assembly" {
@@ -563,8 +544,7 @@ func TestRunSearchFallsBackToNCBIAssembly(t *testing.T) {
 		default:
 			t.Fatalf("path = %q", r.URL.Path)
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {

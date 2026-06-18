@@ -3,12 +3,32 @@ package main
 import (
 	"bytes"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
 	"github.com/martinghunt/ichsm"
 )
+
+func withHTTPTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
+	t.Helper()
+
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	return server
+}
+
+func withPathResponseServer(t *testing.T, path string, body string) *httptest.Server {
+	t.Helper()
+
+	return withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != path {
+			t.Fatalf("path = %q, want %s", r.URL.Path, path)
+		}
+		_, _ = w.Write([]byte(body))
+	})
+}
 
 func withTestClient(t *testing.T, server *httptest.Server) {
 	t.Helper()

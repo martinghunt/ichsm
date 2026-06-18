@@ -2,12 +2,11 @@ package main
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
 func TestRunPubsWritesParentProjectPublications(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/PRJEB1787":
 			_, _ = w.Write([]byte(`<PROJECT_SET>
@@ -70,8 +69,7 @@ func TestRunPubsWritesParentProjectPublications(t *testing.T) {
 		default:
 			t.Fatalf("path = %q", r.URL.Path)
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
