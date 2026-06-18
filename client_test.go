@@ -627,6 +627,38 @@ func TestCountENASecondaryStudyAtRunLevel(t *testing.T) {
 	}
 }
 
+func TestCountENAFilteredGroupsORQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/count" {
+			t.Fatalf("path = %q, want /count", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "read_run" {
+			t.Fatalf("result = %q, want read_run", got)
+		}
+		wantQuery := "(sample_accession=SAMN05276490 OR secondary_sample_accession=SAMN05276490) AND instrument_platform=ILLUMINA"
+		if got := query.Get("query"); got != wantQuery {
+			t.Fatalf("query = %q, want %q", got, wantQuery)
+		}
+		_, _ = w.Write([]byte(`{"count":"5"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	resultType, count, err := client.CountENAFiltered(context.Background(), "SAMN05276490", AccessionTypeSample, AccessionTypeRun, map[string]string{
+		"instrument_platform": "ILLUMINA",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultType != AccessionTypeRun {
+		t.Fatalf("resultType = %q, want %q", resultType, AccessionTypeRun)
+	}
+	if count != 5 {
+		t.Fatalf("count = %d, want 5", count)
+	}
+}
+
 func TestResolveSearchLevelRejectsUnsupportedCombination(t *testing.T) {
 	_, err := ResolveSearchLevel(AccessionTypeRun, AccessionTypeSample)
 	if err == nil {

@@ -331,13 +331,23 @@ func (c *Client) CountENA(ctx context.Context, accession string, accessionType A
 	return c.countENA(ctx, accession, accessionType, level)
 }
 
+// CountENAFiltered returns the number of ENA records matching one normalized
+// accession at a requested output level, with additional ENA query filters.
+func (c *Client) CountENAFiltered(ctx context.Context, accession string, accessionType AccessionType, level AccessionType, filters map[string]string) (AccessionType, int, error) {
+	return c.countENAFiltered(ctx, accession, accessionType, level, filters)
+}
+
 func (c *Client) countENA(ctx context.Context, accession string, accessionType AccessionType, level AccessionType) (AccessionType, int, error) {
+	return c.countENAFiltered(ctx, accession, accessionType, level, nil)
+}
+
+func (c *Client) countENAFiltered(ctx context.Context, accession string, accessionType AccessionType, level AccessionType, filters map[string]string) (AccessionType, int, error) {
 	resultType, err := ResolveSearchLevel(accessionType, level)
 	if err != nil {
 		return "", 0, err
 	}
 	if resultType == AccessionTypeContigSet {
-		return c.countENAContigSet(ctx, accession, accessionType)
+		return c.countENAContigSetFiltered(ctx, accession, accessionType, filters)
 	}
 
 	if accessionType == AccessionTypeStudy && resultType != AccessionTypeStudy && !isPrimaryStudyAccession(accession) {
@@ -347,7 +357,7 @@ func (c *Client) countENA(ctx context.Context, accession string, accessionType A
 		}
 	}
 
-	count, err := c.countENAResultType(ctx, accession, accessionType, resultType)
+	count, err := c.countENAResultTypeFiltered(ctx, accession, accessionType, resultType, filters)
 	if err != nil {
 		return "", 0, err
 	}
@@ -355,11 +365,15 @@ func (c *Client) countENA(ctx context.Context, accession string, accessionType A
 }
 
 func (c *Client) countENAContigSet(ctx context.Context, accession string, accessionType AccessionType) (AccessionType, int, error) {
+	return c.countENAContigSetFiltered(ctx, accession, accessionType, nil)
+}
+
+func (c *Client) countENAContigSetFiltered(ctx context.Context, accession string, accessionType AccessionType, filters map[string]string) (AccessionType, int, error) {
 	candidates := []AccessionType{AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet}
 	var lastResultType AccessionType
 	var lastErr error
 	for _, resultType := range candidates {
-		count, err := c.countENAResultType(ctx, accession, accessionType, resultType)
+		count, err := c.countENAResultTypeFiltered(ctx, accession, accessionType, resultType, filters)
 		if err != nil {
 			lastErr = err
 			continue
@@ -380,6 +394,10 @@ func (c *Client) countENAContigSet(ctx context.Context, accession string, access
 }
 
 func (c *Client) countENAResultType(ctx context.Context, accession string, accessionType AccessionType, resultType AccessionType) (int, error) {
+	return c.countENAResultTypeFiltered(ctx, accession, accessionType, resultType, nil)
+}
+
+func (c *Client) countENAResultTypeFiltered(ctx context.Context, accession string, accessionType AccessionType, resultType AccessionType, filters map[string]string) (int, error) {
 	searchKey, searchValue, err := SearchKeyValue(accessionType, resultType, accession)
 	if err != nil {
 		return 0, err
@@ -392,9 +410,27 @@ func (c *Client) countENAResultType(ctx context.Context, accession string, acces
 
 	params := url.Values{}
 	params.Set("result", endpoint.result)
-	params.Set(searchKey, searchValue)
+	params.Set(searchKey, filteredENAQuery(searchValue, filters))
 	params.Set("format", "json")
 	return c.requestCount(ctx, params)
+}
+
+func filteredENAQuery(baseQuery string, filters map[string]string) string {
+	keys := make([]string, 0, len(filters))
+	for key, value := range filters {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	if len(keys) > 0 && strings.Contains(baseQuery, " OR ") {
+		baseQuery = "(" + baseQuery + ")"
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		baseQuery += " AND " + strings.TrimSpace(key) + "=" + strings.TrimSpace(filters[key])
+	}
+	return baseQuery
 }
 
 // Search identifies and queries a set of accessions. As in the original CLI,

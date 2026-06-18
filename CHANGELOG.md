@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add `ichsm summary <accession>` to report a compact accession rollup with linked IDs, cheap ENA counts, sequencing platform counts, and project publication counts.
 - Add `ichsm links <accession>` to print ENA project, sample, assembly, experiment, run, analysis, and WGS/TSA/TLS contig set relationships as a project-first tree.
 - Add `ichsm links --outfmt table|tsv|json`, with tabular output represented as parent-child edge rows and JSON output represented as the link tree.
 - Add `ichsm pubs <project_accession>` to report PubMed publications linked through ENA project xrefs and NCBI BioProject links, including immediate parent projects.

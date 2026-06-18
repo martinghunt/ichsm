@@ -105,6 +105,12 @@ Get runs for study/project `PRJEB1787`:
 ichsm search -a PRJEB1787 --level run
 ```
 
+Summarize study/project `PRJEB1787`, including linked IDs, ENA counts,
+sequencing platform counts, and publication count:
+```
+ichsm summary PRJEB1787
+```
+
 Count runs for study/project `PRJEB1787` without fetching the run metadata:
 ```
 ichsm search -a PRJEB1787 --level run --count

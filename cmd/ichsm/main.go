@@ -57,7 +57,7 @@ func newRootCommand(out io.Writer, errOut io.Writer) *cobra.Command {
 	cmd.SetOut(out)
 	cmd.SetErr(errOut)
 	cmd.SetVersionTemplate("{{.Version}}\n")
-	cmd.AddCommand(newSearchCommand(), newReadsCommand(), newLinksCommand(), newPubsCommand(), newOpenCommand(), newIdentifyCommand(), newGetFieldsCommand())
+	cmd.AddCommand(newSearchCommand(), newSummaryCommand(), newReadsCommand(), newLinksCommand(), newPubsCommand(), newOpenCommand(), newIdentifyCommand(), newGetFieldsCommand())
 	return cmd
 }
 
