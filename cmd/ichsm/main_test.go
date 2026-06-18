@@ -510,6 +510,7 @@ func TestRunLinksWritesRunTree(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
+	assertNoRootSampleLines(t, stdout)
 
 	const want = "Project: PRJEB90490\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
@@ -541,7 +542,7 @@ func TestRunLinksWritesSampleTree(t *testing.T) {
 			if got := query.Get("fields"); got != strings.Join(linkSampleFields, ",") {
 				t.Fatalf("fields = %q", got)
 			}
-			_, _ = w.Write([]byte(`[{"sample_accession":"SAMN02471593","secondary_sample_accession":"SRS123456","study_accession":"PRJEB45982;PRJNA302362"}]`))
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMN02471593","secondary_sample_accession":"SRS123456"}]`))
 		case "assembly":
 			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
 				t.Fatalf("query = %q", got)
@@ -596,10 +597,9 @@ func TestRunLinksWritesSampleTree(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
+	assertNoRootSampleLines(t, stdout)
 
-	const want = "Project: PRJEB45982\n" +
-		"\u2514\u2500\u2500 Sample: SAMN02471593\n" +
-		"Project: PRJNA302362\n" +
+	const want = "Project: PRJNA302362\n" +
 		"\u2514\u2500\u2500 Sample: SAMN02471593\n" +
 		"    \u251c\u2500\u2500 Assembly: GCA_000231155\n" +
 		"    \u2502   \u2514\u2500\u2500 ContigSet: AGQU01000000\n" +
@@ -684,6 +684,7 @@ func TestRunLinksWritesExperimentTreeWithContigSet(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
+	assertNoRootSampleLines(t, stdout)
 
 	const want = "Project: PRJEB90490\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
@@ -766,6 +767,7 @@ func TestRunLinksWritesProjectTree(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
+	assertNoRootSampleLines(t, stdout)
 
 	const want = "Project: PRJNA302362\n" +
 		"\u251c\u2500\u2500 Sample: SAMN1\n" +
@@ -862,6 +864,7 @@ func TestRunLinksWritesContigSetTree(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
+	assertNoRootSampleLines(t, stdout)
 
 	const want = "Project: PRJEB90490\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
@@ -953,6 +956,7 @@ func TestRunLinksWritesAnalysisTree(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
+	assertNoRootSampleLines(t, stdout)
 
 	const want = "Project: PRJEB90490\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
@@ -999,7 +1003,7 @@ func TestRunLinksWritesAssemblyTree(t *testing.T) {
 			if got := query.Get("fields"); got != strings.Join(linkSampleFields, ",") {
 				t.Fatalf("fields = %q", got)
 			}
-			_, _ = w.Write([]byte(`[{"sample_accession":"SAMN02471593","study_accession":"PRJNA123456"}]`))
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMN02471593"}]`))
 		case "read_run":
 			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
 				t.Fatalf("query = %q", got)
@@ -1046,6 +1050,7 @@ func TestRunLinksWritesAssemblyTree(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
+	assertNoRootSampleLines(t, stdout)
 
 	const want = "Project: PRJNA123456\n" +
 		"\u2514\u2500\u2500 Sample: SAMN02471593\n" +
@@ -1794,6 +1799,16 @@ func TestWriteAlignedRows(t *testing.T) {
 		"aa  x\n"
 	if out.String() != want {
 		t.Fatalf("stdout = %q, want %q", out.String(), want)
+	}
+}
+
+func assertNoRootSampleLines(t *testing.T, stdout string) {
+	t.Helper()
+
+	for _, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
+		if strings.HasPrefix(line, "Sample: ") {
+			t.Fatalf("stdout has root-level sample line %q:\n%s", line, stdout)
+		}
 	}
 }
 

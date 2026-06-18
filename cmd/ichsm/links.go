@@ -115,7 +115,7 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 		sampleAccessions := recordSampleAccessions(records)
 		if len(sampleAccessions) > 0 {
 			for _, sampleAccession := range sampleAccessions {
-				if err := addSampleNeighborhood(ctx, client, builder, sampleAccession); err != nil {
+				if err := addSampleNeighborhoodWithProjects(ctx, client, builder, sampleAccession, sampleProjectFallbacks(records, sampleAccession)); err != nil {
 					return nil, err
 				}
 			}
@@ -184,7 +184,7 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 			builder.addAssemblyRecordPath(record, accession)
 		}
 		for _, sampleAccession := range recordSampleAccessions(assemblyRecords) {
-			if err := addSampleNeighborhood(ctx, client, builder, sampleAccession); err != nil {
+			if err := addSampleNeighborhoodWithProjects(ctx, client, builder, sampleAccession, sampleProjectFallbacks(assemblyRecords, sampleAccession)); err != nil {
 				return nil, err
 			}
 		}
@@ -196,7 +196,7 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 		sampleAccessions := recordSampleAccessions(contigSetRecords)
 		if len(sampleAccessions) > 0 {
 			for _, sampleAccession := range sampleAccessions {
-				if err := addSampleNeighborhood(ctx, client, builder, sampleAccession); err != nil {
+				if err := addSampleNeighborhoodWithProjects(ctx, client, builder, sampleAccession, sampleProjectFallbacks(contigSetRecords, sampleAccession)); err != nil {
 					return nil, err
 				}
 			}
@@ -214,7 +214,7 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 		sampleAccessions := recordSampleAccessions(analysisRecords)
 		if len(sampleAccessions) > 0 {
 			for _, sampleAccession := range sampleAccessions {
-				if err := addSampleNeighborhood(ctx, client, builder, sampleAccession); err != nil {
+				if err := addSampleNeighborhoodWithProjects(ctx, client, builder, sampleAccession, sampleProjectFallbacks(analysisRecords, sampleAccession)); err != nil {
 					return nil, err
 				}
 			}
@@ -283,46 +283,98 @@ func queryLinkAnalysisRecords(ctx context.Context, client *ichsm.Client, accessi
 }
 
 func addSampleNeighborhood(ctx context.Context, client *ichsm.Client, builder *linkTreeBuilder, accession string) error {
+	return addSampleNeighborhoodWithProjects(ctx, client, builder, accession, nil)
+}
+
+func addSampleNeighborhoodWithProjects(ctx context.Context, client *ichsm.Client, builder *linkTreeBuilder, accession string, fallbackProjects []string) error {
 	sampleRecords, err := queryLinkSampleRecords(ctx, client, accession)
 	if err != nil {
 		return err
 	}
-	for _, record := range sampleRecords {
-		builder.addSampleRecordPath(record, accession)
-	}
-
 	assemblyRecords, err := queryLinkAssemblyRecords(ctx, client, accession, ichsm.AccessionTypeSample)
 	if err != nil {
 		return err
 	}
-	for _, record := range assemblyRecords {
-		builder.addAssemblyRecordPath(record, "")
-	}
-
 	runRecords, err := queryLinkRunRecords(ctx, client, accession, ichsm.AccessionTypeSample)
 	if err != nil {
 		return err
 	}
-	for _, record := range runRecords {
-		builder.addRunRecordPath(record, ichsm.AccessionTypeSample, accession)
-	}
-
 	analysisRecords, err := queryLinkAnalysisRecords(ctx, client, accession, ichsm.AccessionTypeSample)
 	if err != nil {
 		return err
 	}
-	for _, record := range analysisRecords {
-		builder.addAnalysisRecordPath(record, "")
-	}
-
 	contigSetRecords, err := queryLinkContigSetRecords(ctx, client, accession, ichsm.AccessionTypeSample)
 	if err != nil {
 		return err
+	}
+
+	fallbackProjects = appendUniqueStrings(fallbackProjects, sampleProjectFallbacks(assemblyRecords, accession)...)
+	fallbackProjects = appendUniqueStrings(fallbackProjects, sampleProjectFallbacks(runRecords, accession)...)
+	fallbackProjects = appendUniqueStrings(fallbackProjects, sampleProjectFallbacks(analysisRecords, accession)...)
+	fallbackProjects = appendUniqueStrings(fallbackProjects, sampleProjectFallbacks(contigSetRecords, accession)...)
+
+	for _, record := range sampleRecords {
+		builder.addSampleRecordPath(record, accession, fallbackProjects)
+	}
+	for _, record := range assemblyRecords {
+		builder.addAssemblyRecordPath(record, "")
+	}
+	for _, record := range runRecords {
+		builder.addRunRecordPath(record, ichsm.AccessionTypeSample, accession)
+	}
+	for _, record := range analysisRecords {
+		builder.addAnalysisRecordPath(record, "")
 	}
 	for _, record := range contigSetRecords {
 		builder.addContigSetRecordPath(record)
 	}
 	return nil
+}
+
+func appendUniqueStrings(values []string, additions ...string) []string {
+	seen := map[string]bool{}
+	for _, value := range values {
+		seen[value] = true
+	}
+	for _, value := range additions {
+		if seen[value] {
+			continue
+		}
+		values = append(values, value)
+		seen[value] = true
+	}
+	return values
+}
+
+func sampleProjectFallbacks(records []ichsm.Record, sampleAccession string) []string {
+	seen := map[string]bool{}
+	var projects []string
+	for _, record := range records {
+		if !recordHasSampleAccession(record, sampleAccession) {
+			continue
+		}
+		for _, key := range []string{"study_accession", "secondary_study_accession"} {
+			for _, accession := range recordLinkValues(record, key) {
+				if seen[accession] {
+					continue
+				}
+				projects = append(projects, accession)
+				seen[accession] = true
+			}
+		}
+	}
+	return projects
+}
+
+func recordHasSampleAccession(record ichsm.Record, sampleAccession string) bool {
+	for _, key := range []string{"sample_accession", "secondary_sample_accession"} {
+		for _, accession := range recordLinkValues(record, key) {
+			if accession == sampleAccession {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func queryRunLinkedContigSetRecords(ctx context.Context, client *ichsm.Client, runRecords []ichsm.Record) ([]ichsm.Record, error) {
@@ -437,9 +489,12 @@ func (b *linkTreeBuilder) addStudyRecordPath(record ichsm.Record, fixedAccession
 	}
 }
 
-func (b *linkTreeBuilder) addSampleRecordPath(record ichsm.Record, fixedAccession string) {
+func (b *linkTreeBuilder) addSampleRecordPath(record ichsm.Record, fixedAccession string, fallbackProjects []string) {
 	sample := firstNonEmpty(recordLinkString(record, "sample_accession", "secondary_sample_accession"), fixedAccession)
 	projects := recordLinkValues(record, "study_accession")
+	if len(projects) == 0 {
+		projects = fallbackProjects
+	}
 	if len(projects) == 0 {
 		projects = []string{""}
 	}
