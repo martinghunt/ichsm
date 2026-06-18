@@ -30,12 +30,13 @@ const (
 
 // Client queries ENA and NCBI metadata services.
 type Client struct {
-	BaseURL     string
-	NCBIBaseURL string
-	NCBIAPIKey  string
-	NCBIEmail   string
-	NCBITool    string
-	HTTPClient  *http.Client
+	BaseURL        string
+	BrowserBaseURL string
+	NCBIBaseURL    string
+	NCBIAPIKey     string
+	NCBIEmail      string
+	NCBITool       string
+	HTTPClient     *http.Client
 
 	// ENARequestsPerSecond limits ENA Portal API requests per process. Zero uses
 	// the default of 25 requests per second; negative values disable the limiter.

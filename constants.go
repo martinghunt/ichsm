@@ -1,6 +1,7 @@
 package ichsm
 
 const BasePortalURL = "https://www.ebi.ac.uk/ena/portal/api/"
+const BaseBrowserXMLURL = "https://www.ebi.ac.uk/ena/browser/api/xml/"
 
 type searchEndpoint struct {
 	mainType string

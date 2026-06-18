@@ -115,6 +115,12 @@ Show project, sample, assembly, experiment, run, analysis, and contig set links 
 ichsm links SRR3675520
 ```
 
+Show PubMed publications linked to study/project `PRJEB1787`, including
+publications attached to immediate parent projects:
+```
+ichsm pubs PRJEB1787
+```
+
 Get a FASTQ download manifest for sample `SAMN05276490`:
 ```
 ichsm reads -a SAMN05276490
