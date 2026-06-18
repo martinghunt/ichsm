@@ -823,12 +823,12 @@ func linkEdgeRow(inputAccession string, parent *linkTreeNode, child *linkTreeNod
 	childAccession, childDetail := linkNodeAccessionAndDetail(child)
 	return []string{
 		inputAccession,
-		formatLinkCell(parentType),
-		formatLinkCell(parentAccession),
-		formatLinkCell(parentDetail),
+		dotIfEmpty(parentType),
+		dotIfEmpty(parentAccession),
+		dotIfEmpty(parentDetail),
 		linkNodeType(child),
-		formatLinkCell(childAccession),
-		formatLinkCell(childDetail),
+		dotIfEmpty(childAccession),
+		dotIfEmpty(childDetail),
 	}
 }
 
@@ -851,11 +851,4 @@ func linkNodeAccessionAndDetail(node *linkTreeNode) (string, string) {
 		return accession, ""
 	}
 	return before, strings.TrimSuffix(after, ")")
-}
-
-func formatLinkCell(value string) string {
-	if value == "" {
-		return "."
-	}
-	return value
 }

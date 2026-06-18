@@ -742,7 +742,7 @@ func sameStringSet(a []string, b []string) bool {
 
 func formatValue(value any) string {
 	if value == nil {
-		return "."
+		return dotIfEmpty("")
 	}
 	return fmt.Sprint(value)
 }

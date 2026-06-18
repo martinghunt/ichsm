@@ -31,6 +31,13 @@ func writeRowsForOutputFormat(out io.Writer, rows [][]string, outfmt string) err
 	}
 }
 
+func dotIfEmpty(value string) string {
+	if value == "" {
+		return "."
+	}
+	return value
+}
+
 func writeAlignedRows(out io.Writer, rows [][]string) error {
 	if len(rows) == 0 {
 		return nil

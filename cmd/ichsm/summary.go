@@ -351,23 +351,19 @@ func summaryRows(summaries []summaryResult) [][]string {
 }
 
 func formatSummaryCell(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "."
-	}
-	return value
+	return dotIfEmpty(strings.TrimSpace(value))
 }
 
 func formatSummaryValues(values []string) string {
 	if len(values) == 0 {
-		return "."
+		return dotIfEmpty("")
 	}
 	return strings.Join(values, ";")
 }
 
 func formatSummaryCount(count *int) string {
 	if count == nil {
-		return "."
+		return dotIfEmpty("")
 	}
 	return fmt.Sprint(*count)
 }
@@ -375,7 +371,7 @@ func formatSummaryCount(count *int) string {
 func formatSummaryCountMap(counts map[string]int) string {
 	keys := orderedSummaryCountKeys(counts)
 	if len(keys) == 0 {
-		return "."
+		return dotIfEmpty("")
 	}
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {

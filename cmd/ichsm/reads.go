@@ -174,18 +174,11 @@ func readFilesRows(files []ichsm.ReadFile) [][]string {
 			file.RunAccession,
 			file.Filename,
 			file.URL,
-			emptyAsDot(file.MD5),
-			emptyAsDot(file.Bytes),
+			dotIfEmpty(file.MD5),
+			dotIfEmpty(file.Bytes),
 		})
 	}
 	return rows
-}
-
-func emptyAsDot(value string) string {
-	if value == "" {
-		return "."
-	}
-	return value
 }
 
 func shellQuote(value string) string {

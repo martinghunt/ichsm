@@ -71,18 +71,11 @@ func publicationRows(publications []ichsm.Publication) [][]string {
 			publication.Relation,
 			strings.Join(publication.Sources, ","),
 			publication.PubMedID,
-			formatPublicationCell(publication.Year),
-			formatPublicationCell(publication.Journal),
-			formatPublicationCell(publication.DOI),
-			formatPublicationCell(publication.Title),
+			dotIfEmpty(publication.Year),
+			dotIfEmpty(publication.Journal),
+			dotIfEmpty(publication.DOI),
+			dotIfEmpty(publication.Title),
 		})
 	}
 	return rows
-}
-
-func formatPublicationCell(value string) string {
-	if value == "" {
-		return "."
-	}
-	return value
 }
