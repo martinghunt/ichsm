@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
 func TestRunLinksWritesRunTree(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -72,8 +71,7 @@ func TestRunLinksWritesRunTree(t *testing.T) {
 		default:
 			t.Fatalf("result = %q", query.Get("result"))
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -102,7 +100,7 @@ func TestRunLinksWritesRunTree(t *testing.T) {
 }
 
 func TestRunLinksWritesSampleTree(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -159,8 +157,7 @@ func TestRunLinksWritesSampleTree(t *testing.T) {
 		default:
 			t.Fatalf("result = %q", query.Get("result"))
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -184,7 +181,7 @@ func TestRunLinksWritesSampleTree(t *testing.T) {
 }
 
 func TestRunLinksWritesExperimentTreeWithContigSet(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -246,8 +243,7 @@ func TestRunLinksWritesExperimentTreeWithContigSet(t *testing.T) {
 		default:
 			t.Fatalf("result = %q", query.Get("result"))
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -276,7 +272,7 @@ func TestRunLinksWritesExperimentTreeWithContigSet(t *testing.T) {
 }
 
 func TestRunLinksWritesProjectTree(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -329,8 +325,7 @@ func TestRunLinksWritesProjectTree(t *testing.T) {
 		default:
 			t.Fatalf("result = %q", query.Get("result"))
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -357,7 +352,7 @@ func TestRunLinksWritesProjectTree(t *testing.T) {
 }
 
 func TestRunLinksWritesContigSetTree(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -426,8 +421,7 @@ func TestRunLinksWritesContigSetTree(t *testing.T) {
 		default:
 			t.Fatalf("result = %q", query.Get("result"))
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -456,7 +450,7 @@ func TestRunLinksWritesContigSetTree(t *testing.T) {
 }
 
 func TestRunLinksWritesAnalysisTree(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -518,8 +512,7 @@ func TestRunLinksWritesAnalysisTree(t *testing.T) {
 		default:
 			t.Fatalf("result = %q", query.Get("result"))
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
@@ -548,7 +541,7 @@ func TestRunLinksWritesAnalysisTree(t *testing.T) {
 }
 
 func TestRunLinksWritesAssemblyTree(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
 			t.Fatalf("path = %q, want /search", r.URL.Path)
 		}
@@ -612,8 +605,7 @@ func TestRunLinksWritesAssemblyTree(t *testing.T) {
 		default:
 			t.Fatalf("result = %q", query.Get("result"))
 		}
-	}))
-	defer server.Close()
+	})
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
