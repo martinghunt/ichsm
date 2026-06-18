@@ -451,6 +451,14 @@ func TestRunLinksWritesRunTree(t *testing.T) {
 				t.Fatalf("fields = %q", got)
 			}
 			_, _ = w.Write([]byte(`[{"sample_accession":"SAMD00654312","secondary_sample_accession":"SRS24913212","study_accession":"PRJEB90490;PRJDB16917"}]`))
+		case "assembly":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAssemblyFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
 		case "read_run":
 			switch got := query.Get("query"); got {
 			case "run_accession=DRR510832", "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312":
@@ -527,23 +535,31 @@ func TestRunLinksWritesSampleTree(t *testing.T) {
 		query := r.URL.Query()
 		switch query.Get("result") {
 		case "sample":
-			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
 				t.Fatalf("query = %q", got)
 			}
 			if got := query.Get("fields"); got != strings.Join(linkSampleFields, ",") {
 				t.Fatalf("fields = %q", got)
 			}
-			_, _ = w.Write([]byte(`[{"sample_accession":"SAMN05276490","secondary_sample_accession":"SRS123456","study_accession":"PRJEB45982;PRJNA302362"}]`))
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMN02471593","secondary_sample_accession":"SRS123456","study_accession":"PRJEB45982;PRJNA302362"}]`))
+		case "assembly":
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAssemblyFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"accession":"GCA_000231155","sample_accession":"SAMN02471593","study_accession":"PRJNA302362"}]`))
 		case "read_run":
-			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
 				t.Fatalf("query = %q", got)
 			}
 			if got := query.Get("fields"); got != strings.Join(linkRunFields, ",") {
 				t.Fatalf("fields = %q", got)
 			}
-			_, _ = w.Write([]byte(`[{"run_accession":"SRR3675520","experiment_accession":"SRX1850792","sample_accession":"SAMN05276490","study_accession":"PRJNA302362"}]`))
+			_, _ = w.Write([]byte(`[{"run_accession":"SRR3675520","experiment_accession":"SRX1850792","sample_accession":"SAMN02471593","study_accession":"PRJNA302362"}]`))
 		case "analysis":
-			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
 				t.Fatalf("query = %q", got)
 			}
 			if got := query.Get("fields"); got != strings.Join(linkAnalysisFields, ",") {
@@ -551,15 +567,15 @@ func TestRunLinksWritesSampleTree(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`[]`))
 		case "wgs_set":
-			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
 				t.Fatalf("query = %q", got)
 			}
 			if got := query.Get("fields"); got != strings.Join(linkWGSSetFields, ",") {
 				t.Fatalf("fields = %q", got)
 			}
-			_, _ = w.Write([]byte(`[{"accession":"BAAHUD010000000","sample_accession":"SAMN05276490","study_accession":"PRJNA302362"}]`))
+			_, _ = w.Write([]byte(`[{"accession":"AGQU01000000","assembly_accession":"GCA_000231155","sample_accession":"SAMN02471593","study_accession":"PRJNA302362"}]`))
 		case "tsa_set", "tls_set":
-			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
 				t.Fatalf("query = %q", got)
 			}
 			if got := query.Get("fields"); got != strings.Join(linkContigSetFields, ",") {
@@ -574,7 +590,7 @@ func TestRunLinksWritesSampleTree(t *testing.T) {
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
-		return run([]string{"links", "SRS123456"})
+		return run([]string{"links", "SAMN02471593"})
 	})
 
 	if code != 0 {
@@ -582,12 +598,13 @@ func TestRunLinksWritesSampleTree(t *testing.T) {
 	}
 
 	const want = "Project: PRJEB45982\n" +
-		"\u2514\u2500\u2500 Sample: SAMN05276490\n" +
+		"\u2514\u2500\u2500 Sample: SAMN02471593\n" +
 		"Project: PRJNA302362\n" +
-		"\u2514\u2500\u2500 Sample: SAMN05276490\n" +
-		"    \u251c\u2500\u2500 Experiment: SRX1850792\n" +
-		"    \u2502   \u2514\u2500\u2500 Run: SRR3675520\n" +
-		"    \u2514\u2500\u2500 ContigSet: BAAHUD010000000\n"
+		"\u2514\u2500\u2500 Sample: SAMN02471593\n" +
+		"    \u251c\u2500\u2500 Assembly: GCA_000231155\n" +
+		"    \u2502   \u2514\u2500\u2500 ContigSet: AGQU01000000\n" +
+		"    \u2514\u2500\u2500 Experiment: SRX1850792\n" +
+		"        \u2514\u2500\u2500 Run: SRR3675520\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
@@ -608,6 +625,14 @@ func TestRunLinksWritesExperimentTreeWithContigSet(t *testing.T) {
 				t.Fatalf("fields = %q", got)
 			}
 			_, _ = w.Write([]byte(`[{"sample_accession":"SAMD00654312","secondary_sample_accession":"SRS24913212","study_accession":"PRJEB90490;PRJDB16917"}]`))
+		case "assembly":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAssemblyFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
 		case "read_run":
 			switch got := query.Get("query"); got {
 			case "experiment_accession=DRX494734", "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312":
@@ -771,6 +796,14 @@ func TestRunLinksWritesContigSetTree(t *testing.T) {
 				t.Fatalf("fields = %q", got)
 			}
 			_, _ = w.Write([]byte(`[{"sample_accession":"SAMD00654312","secondary_sample_accession":"SRS24913212","study_accession":"PRJEB90490;PRJDB16917"}]`))
+		case "assembly":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAssemblyFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
 		case "wgs_set":
 			switch got := query.Get("query"); got {
 			case "wgs_set=DBIITB01":
@@ -871,6 +904,14 @@ func TestRunLinksWritesAnalysisTree(t *testing.T) {
 				t.Fatalf("fields = %q", got)
 			}
 			_, _ = w.Write([]byte(`[{"sample_accession":"SAMD00654312","secondary_sample_accession":"SRS24913212","study_accession":"PRJEB90490;PRJDB16917"}]`))
+		case "assembly":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAssemblyFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
 		case "read_run":
 			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
 				t.Fatalf("query = %q", got)
@@ -929,9 +970,97 @@ func TestRunLinksWritesAnalysisTree(t *testing.T) {
 	}
 }
 
+func TestRunLinksWritesAssemblyTree(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		switch query.Get("result") {
+		case "assembly":
+			switch got := query.Get("query"); got {
+			case "accession=GCA_000231155":
+				if got := query.Get("fields"); got != strings.Join(linkAssemblyFields, ",") {
+					t.Fatalf("fields = %q", got)
+				}
+				_, _ = w.Write([]byte(`[{"accession":"GCA_000231155","sample_accession":"SAMN02471593","study_accession":"PRJNA123456","run_accession":"ERR123456"}]`))
+			case "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593":
+				if got := query.Get("fields"); got != strings.Join(linkAssemblyFields, ",") {
+					t.Fatalf("fields = %q", got)
+				}
+				_, _ = w.Write([]byte(`[{"accession":"GCA_000231155","sample_accession":"SAMN02471593","study_accession":"PRJNA123456","run_accession":"ERR123456"}]`))
+			default:
+				t.Fatalf("query = %q", got)
+			}
+		case "sample":
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkSampleFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMN02471593","study_accession":"PRJNA123456"}]`))
+		case "read_run":
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkRunFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"run_accession":"ERR123456","experiment_accession":"ERX123456","sample_accession":"SAMN02471593","study_accession":"PRJNA123456"}]`))
+		case "analysis":
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAnalysisFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
+		case "wgs_set":
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkWGSSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"accession":"AGQU010000000","assembly_accession":"GCA_000231155","sample_accession":"SAMN02471593","study_accession":"PRJNA123456","run_accession":"ERR123456"}]`))
+		case "tsa_set", "tls_set":
+			if got := query.Get("query"); got != "sample_accession=SAMN02471593 OR secondary_sample_accession=SAMN02471593" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkContigSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Fatalf("result = %q", query.Get("result"))
+		}
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"links", "GCA_000231155"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "Project: PRJNA123456\n" +
+		"\u2514\u2500\u2500 Sample: SAMN02471593\n" +
+		"    \u251c\u2500\u2500 Assembly: GCA_000231155\n" +
+		"    \u2502   \u2514\u2500\u2500 ContigSet: AGQU010000000\n" +
+		"    \u2514\u2500\u2500 Experiment: ERX123456\n" +
+		"        \u2514\u2500\u2500 Run: ERR123456\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
 func TestRunLinksRejectsUnsupportedAccessionType(t *testing.T) {
 	code, stdout := captureStdout(t, func() int {
-		return run([]string{"links", "GCF_000001405.40"})
+		return run([]string{"links", "U49845.1"})
 	})
 
 	if code == 0 {

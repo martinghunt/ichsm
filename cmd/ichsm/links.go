@@ -30,6 +30,13 @@ var linkStudyFields = []string{
 	"secondary_study_accession",
 }
 
+var linkAssemblyFields = []string{
+	"accession",
+	"sample_accession",
+	"run_accession",
+	"study_accession",
+}
+
 var linkContigSetFields = []string{
 	"accession",
 	"sample_accession",
@@ -37,7 +44,7 @@ var linkContigSetFields = []string{
 	"study_accession",
 }
 
-var linkWGSSetFields = append(append([]string(nil), linkContigSetFields...), "run_accession")
+var linkWGSSetFields = append(append([]string(nil), linkContigSetFields...), "assembly_accession", "run_accession")
 
 var linkAnalysisFields = []string{
 	"analysis_accession",
@@ -63,7 +70,7 @@ type linkTreeNode struct {
 func newLinksCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "links [accession]",
-		Short: "Show linked project, sample, experiment, run, analysis, and contig set accessions",
+		Short: "Show linked project, sample, assembly, experiment, run, analysis, and contig set accessions",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeLinks(cmd, args[0])
@@ -168,6 +175,19 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 		for _, record := range contigSetRecords {
 			builder.addContigSetRecordPath(record)
 		}
+	case ichsm.AccessionTypeAssembly:
+		assemblyRecords, err := queryLinkAssemblyRecords(ctx, client, accession, accessionType)
+		if err != nil {
+			return nil, err
+		}
+		for _, record := range assemblyRecords {
+			builder.addAssemblyRecordPath(record, accession)
+		}
+		for _, sampleAccession := range recordSampleAccessions(assemblyRecords) {
+			if err := addSampleNeighborhood(ctx, client, builder, sampleAccession); err != nil {
+				return nil, err
+			}
+		}
 	case ichsm.AccessionTypeContigSet, ichsm.AccessionTypeWGSSet, ichsm.AccessionTypeTSASet, ichsm.AccessionTypeTLSSet:
 		contigSetRecords, err := queryLinkContigSetRecords(ctx, client, accession, accessionType)
 		if err != nil {
@@ -203,7 +223,7 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 			builder.addAnalysisRecordPath(record, accession)
 		}
 	default:
-		return nil, fmt.Errorf("links supports run, experiment, sample, study/project, analysis, and contig set accessions")
+		return nil, fmt.Errorf("links supports run, experiment, sample, study/project, assembly, analysis, and contig set accessions")
 	}
 
 	return builder.roots, nil
@@ -229,6 +249,14 @@ func queryLinkStudyRecords(ctx context.Context, client *ichsm.Client, accession 
 	_, _, records, err := client.Query(ctx, accession, ichsm.AccessionTypeStudy, linkStudyFields, ichsm.AccessionTypeStudy)
 	if err != nil {
 		return nil, fmt.Errorf("error getting links for accession %s: %w", accession, err)
+	}
+	return records, nil
+}
+
+func queryLinkAssemblyRecords(ctx context.Context, client *ichsm.Client, accession string, accessionType ichsm.AccessionType) ([]ichsm.Record, error) {
+	_, _, records, err := client.Query(ctx, accession, accessionType, linkAssemblyFields, ichsm.AccessionTypeAssembly)
+	if err != nil {
+		return nil, fmt.Errorf("error getting assembly links for accession %s: %w", accession, err)
 	}
 	return records, nil
 }
@@ -261,6 +289,14 @@ func addSampleNeighborhood(ctx context.Context, client *ichsm.Client, builder *l
 	}
 	for _, record := range sampleRecords {
 		builder.addSampleRecordPath(record, accession)
+	}
+
+	assemblyRecords, err := queryLinkAssemblyRecords(ctx, client, accession, ichsm.AccessionTypeSample)
+	if err != nil {
+		return err
+	}
+	for _, record := range assemblyRecords {
+		builder.addAssemblyRecordPath(record, "")
 	}
 
 	runRecords, err := queryLinkRunRecords(ctx, client, accession, ichsm.AccessionTypeSample)
@@ -397,7 +433,7 @@ func (b *linkTreeBuilder) addStudyRecordPath(record ichsm.Record, fixedAccession
 		projects = []string{fixedAccession}
 	}
 	for _, project := range projects {
-		b.addPath(project, "", "", "", "", "")
+		b.addPath(project, "", "", "", "", "", "")
 	}
 }
 
@@ -408,7 +444,7 @@ func (b *linkTreeBuilder) addSampleRecordPath(record ichsm.Record, fixedAccessio
 		projects = []string{""}
 	}
 	for _, project := range projects {
-		b.addPath(project, sample, "", "", "", "")
+		b.addPath(project, sample, "", "", "", "", "")
 	}
 }
 
@@ -434,7 +470,19 @@ func (b *linkTreeBuilder) addRunRecordPath(record ichsm.Record, accessionType ic
 	}
 
 	for _, project := range projects {
-		b.addPath(project, sample, experiment, run, "", "")
+		b.addPath(project, sample, "", experiment, run, "", "")
+	}
+}
+
+func (b *linkTreeBuilder) addAssemblyRecordPath(record ichsm.Record, fixedAccession string) {
+	projects := recordLinkValues(record, "study_accession")
+	if len(projects) == 0 {
+		projects = []string{""}
+	}
+	sample := recordLinkString(record, "sample_accession")
+	assembly := firstNonEmpty(recordLinkString(record, "accession"), fixedAccession)
+	for _, project := range projects {
+		b.addPath(project, sample, assembly, "", "", "", "")
 	}
 }
 
@@ -444,9 +492,10 @@ func (b *linkTreeBuilder) addContigSetRecordPath(record ichsm.Record) {
 		projects = []string{""}
 	}
 	sample := recordLinkString(record, "sample_accession", "secondary_sample_accession")
+	assembly := recordLinkString(record, "assembly_accession")
 	contigSet := recordLinkString(record, "accession")
 	for _, project := range projects {
-		b.addPath(project, sample, "", "", "", contigSet)
+		b.addPath(project, sample, assembly, "", "", "", contigSet)
 	}
 }
 
@@ -466,14 +515,15 @@ func (b *linkTreeBuilder) addAnalysisRecordPath(record ichsm.Record, fixedAccess
 	}
 
 	for _, project := range projects {
-		b.addPath(project, sample, "", "", analysis, "")
+		b.addPath(project, sample, "", "", "", analysis, "")
 	}
 }
 
-func (b *linkTreeBuilder) addPath(project string, sample string, experiment string, run string, analysis string, contigSet string) {
+func (b *linkTreeBuilder) addPath(project string, sample string, assembly string, experiment string, run string, analysis string, contigSet string) {
 	entries := compactLinkEntries([]linkEntry{
 		{label: "Project", accession: project},
 		{label: "Sample", accession: sample},
+		{label: "Assembly", accession: assembly},
 		{label: "Experiment", accession: experiment},
 		{label: "Run", accession: run},
 		{label: "Analysis", accession: analysis},

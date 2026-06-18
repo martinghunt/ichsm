@@ -110,7 +110,7 @@ Count runs for study/project `PRJEB1787` without fetching the run metadata:
 ichsm search -a PRJEB1787 --level run --count
 ```
 
-Show project, sample, experiment, run, analysis, and contig set links as a tree:
+Show project, sample, assembly, experiment, run, analysis, and contig set links as a tree:
 ```
 ichsm links SRR3675520
 ```
