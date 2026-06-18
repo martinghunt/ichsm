@@ -27,7 +27,13 @@ func TestClientReadFilesQueriesENAReadRuns(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := &Client{
+		BaseURL:               server.URL + "/",
+		HTTPClient:            server.Client(),
+		ENARequestsPerSecond:  -1,
+		NCBIRequestsPerSecond: -1,
+		MaxRequestRetries:     -1,
+	}
 	files, err := client.ReadFiles(context.Background(), ReadFileOptions{
 		Accessions: []string{"ERR123456"},
 		OutputDir:  "reads",

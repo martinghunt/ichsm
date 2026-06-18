@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -34,7 +36,35 @@ type Client struct {
 	NCBIEmail   string
 	NCBITool    string
 	HTTPClient  *http.Client
+
+	// ENARequestsPerSecond limits ENA Portal API requests per process. Zero uses
+	// the default of 25 requests per second; negative values disable the limiter.
+	ENARequestsPerSecond int
+	// NCBIRequestsPerSecond limits NCBI E-utilities requests per process. Zero
+	// uses the default of 3 requests per second, or 10 with an API key; negative
+	// values disable the limiter.
+	NCBIRequestsPerSecond int
+	// MaxRequestRetries controls retries for HTTP 429 and transient 5xx responses.
+	// Zero uses the default; negative values disable retries.
+	MaxRequestRetries int
+	// RequestRetryBaseDelay controls exponential retry backoff when Retry-After is
+	// not supplied. Zero uses the default.
+	RequestRetryBaseDelay time.Duration
+	// RequestRetryMaxDelay caps exponential retry backoff. Zero uses the default.
+	RequestRetryMaxDelay time.Duration
 }
+
+const (
+	defaultENARequestsPerSecond        = 25
+	defaultNCBIRequestsPerSecond       = 3
+	defaultNCBIAPIKeyRequestsPerSecond = 10
+	defaultMaxRequestRetries           = 5
+	defaultRetryBaseDelay              = 250 * time.Millisecond
+	defaultRetryMaxDelay               = 5 * time.Second
+)
+
+var enaRequestLimiter requestRateLimiter
+var ncbiRequestLimiter requestRateLimiter
 
 // SearchOptions configures a multi-accession search.
 type SearchOptions struct {
@@ -601,15 +631,42 @@ func (c *Client) request(ctx context.Context, path string, params url.Values) ([
 	if c != nil && c.BaseURL != "" {
 		baseURL = c.BaseURL
 	}
-	return c.requestWithBase(ctx, baseURL, path, params)
+	return c.requestWithBase(ctx, baseURL, path, params, "ENA", &enaRequestLimiter, c.enaRateLimitInterval())
 }
 
-func (c *Client) requestWithBase(ctx context.Context, baseURL string, path string, params url.Values) ([]byte, error) {
+func (c *Client) requestWithBase(ctx context.Context, baseURL string, path string, params url.Values, serviceName string, limiter *requestRateLimiter, rateLimitInterval time.Duration) ([]byte, error) {
 	requestURL, err := requestURL(baseURL, path, params)
 	if err != nil {
 		return nil, err
 	}
 
+	maxRetries := c.maxRequestRetries()
+	for attempt := 0; ; attempt++ {
+		if limiter != nil {
+			if err := limiter.wait(ctx, rateLimitInterval); err != nil {
+				return nil, fmt.Errorf("error waiting for %s rate limit: %w", serviceName, err)
+			}
+		}
+
+		body, err := c.requestOnce(ctx, requestURL)
+		if err == nil {
+			return body, nil
+		}
+		if !isRetryableRequestError(err) || attempt >= maxRetries {
+			if attempt > 0 {
+				return nil, fmt.Errorf("error requesting data after %d attempts: %w", attempt+1, err)
+			}
+			return nil, err
+		}
+
+		delay := c.requestRetryDelay(attempt, err)
+		if err := sleepContext(ctx, delay); err != nil {
+			return nil, fmt.Errorf("error waiting to retry request: %w", err)
+		}
+	}
+}
+
+func (c *Client) requestOnce(ctx context.Context, requestURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
@@ -625,12 +682,197 @@ func (c *Client) requestWithBase(ctx context.Context, baseURL string, path strin
 	if err != nil {
 		return nil, err
 	}
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error requesting data: status=%d url=%s body=%s", resp.StatusCode, requestURL, strings.TrimSpace(string(body)))
+		return nil, &requestStatusError{
+			statusCode: resp.StatusCode,
+			url:        requestURL,
+			body:       trimResponseBody(body),
+			retryAfter: resp.Header.Get("Retry-After"),
+		}
 	}
 
 	return body, nil
+}
+
+type requestStatusError struct {
+	statusCode int
+	url        string
+	body       string
+	retryAfter string
+}
+
+func (e *requestStatusError) Error() string {
+	return fmt.Sprintf("error requesting data: status=%d url=%s body=%s", e.statusCode, e.url, e.body)
+}
+
+func isRetryableRequestError(err error) bool {
+	statusErr, ok := err.(*requestStatusError)
+	if !ok {
+		return false
+	}
+	if statusErr.statusCode == http.StatusTooManyRequests {
+		return true
+	}
+	return statusErr.statusCode == http.StatusInternalServerError ||
+		statusErr.statusCode == http.StatusBadGateway ||
+		statusErr.statusCode == http.StatusServiceUnavailable ||
+		statusErr.statusCode == http.StatusGatewayTimeout
+}
+
+func (c *Client) requestRetryDelay(attempt int, err error) time.Duration {
+	if statusErr, ok := err.(*requestStatusError); ok {
+		if delay, ok := parseRetryAfter(statusErr.retryAfter, time.Now()); ok {
+			return delay
+		}
+	}
+
+	delay := c.retryBaseDelay()
+	for i := 0; i < attempt; i++ {
+		if delay >= c.retryMaxDelay()/2 {
+			delay = c.retryMaxDelay()
+			break
+		}
+		delay *= 2
+	}
+	if maxDelay := c.retryMaxDelay(); delay > maxDelay {
+		delay = maxDelay
+	}
+	if delay <= 0 {
+		return 0
+	}
+
+	jitterLimit := delay / 2
+	if jitterLimit <= 0 {
+		return delay
+	}
+	delay += time.Duration(rand.Int63n(int64(jitterLimit) + 1))
+	if maxDelay := c.retryMaxDelay(); delay > maxDelay {
+		delay = maxDelay
+	}
+	return delay
+}
+
+func parseRetryAfter(value string, now time.Time) (time.Duration, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	if seconds, err := strconv.Atoi(value); err == nil {
+		if seconds <= 0 {
+			return 0, true
+		}
+		return time.Duration(seconds) * time.Second, true
+	}
+	retryAt, err := http.ParseTime(value)
+	if err != nil {
+		return 0, false
+	}
+	delay := retryAt.Sub(now)
+	if delay < 0 {
+		delay = 0
+	}
+	return delay, true
+}
+
+func sleepContext(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return ctx.Err()
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func trimResponseBody(body []byte) string {
+	const maxErrorBodyBytes = 1000
+	text := strings.TrimSpace(string(body))
+	if len(text) <= maxErrorBodyBytes {
+		return text
+	}
+	return text[:maxErrorBodyBytes] + "..."
+}
+
+func (c *Client) maxRequestRetries() int {
+	if c != nil && c.MaxRequestRetries < 0 {
+		return 0
+	}
+	if c != nil && c.MaxRequestRetries > 0 {
+		return c.MaxRequestRetries
+	}
+	return defaultMaxRequestRetries
+}
+
+func (c *Client) retryBaseDelay() time.Duration {
+	if c != nil && c.RequestRetryBaseDelay > 0 {
+		return c.RequestRetryBaseDelay
+	}
+	return defaultRetryBaseDelay
+}
+
+func (c *Client) retryMaxDelay() time.Duration {
+	if c != nil && c.RequestRetryMaxDelay > 0 {
+		return c.RequestRetryMaxDelay
+	}
+	return defaultRetryMaxDelay
+}
+
+func (c *Client) enaRateLimitInterval() time.Duration {
+	requestsPerSecond := defaultENARequestsPerSecond
+	if c != nil && c.ENARequestsPerSecond != 0 {
+		requestsPerSecond = c.ENARequestsPerSecond
+	}
+	return requestRateLimitInterval(requestsPerSecond)
+}
+
+func (c *Client) ncbiRateLimitInterval() time.Duration {
+	requestsPerSecond := defaultNCBIRequestsPerSecond
+	if c != nil && strings.TrimSpace(c.NCBIAPIKey) != "" {
+		requestsPerSecond = defaultNCBIAPIKeyRequestsPerSecond
+	}
+	if c != nil && c.NCBIRequestsPerSecond != 0 {
+		requestsPerSecond = c.NCBIRequestsPerSecond
+	}
+	return requestRateLimitInterval(requestsPerSecond)
+}
+
+func requestRateLimitInterval(requestsPerSecond int) time.Duration {
+	if requestsPerSecond <= 0 {
+		return 0
+	}
+	interval := time.Second / time.Duration(requestsPerSecond)
+	if interval <= 0 {
+		return time.Nanosecond
+	}
+	return interval
+}
+
+type requestRateLimiter struct {
+	mu   sync.Mutex
+	next time.Time
+}
+
+func (l *requestRateLimiter) wait(ctx context.Context, interval time.Duration) error {
+	if interval <= 0 {
+		return nil
+	}
+
+	l.mu.Lock()
+	now := time.Now()
+	if l.next.IsZero() || now.After(l.next) {
+		l.next = now.Add(interval)
+		l.mu.Unlock()
+		return nil
+	}
+	delay := l.next.Sub(now)
+	l.next = l.next.Add(interval)
+	l.mu.Unlock()
+
+	return sleepContext(ctx, delay)
 }
 
 func (c *Client) requestURL(path string, params url.Values) (string, error) {

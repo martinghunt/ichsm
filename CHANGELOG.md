@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Avoid redundant ENA study-resolution requests when `links` or count/search queries already have a primary `PRJ...` project accession.
+- Limit ENA Portal API requests to 25 per second per process, limit NCBI E-utilities requests to 3 per second or 10 with an API key, and retry HTTP 429/5xx responses with backoff.
 
 ## [0.4.0] - 2026-06-17
 

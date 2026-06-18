@@ -134,7 +134,13 @@ func TestWarnLargeJSONSearchCountsForProjectRun(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &ichsm.Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := &ichsm.Client{
+		BaseURL:               server.URL + "/",
+		HTTPClient:            server.Client(),
+		ENARequestsPerSecond:  -1,
+		NCBIRequestsPerSecond: -1,
+		MaxRequestRetries:     -1,
+	}
 	var stderr bytes.Buffer
 	warnLargeJSONSearchCounts(context.Background(), client, []accessionSearch{
 		{input: "ERP001736", fixed: "ERP001736", typ: ichsm.AccessionTypeStudy},
@@ -156,7 +162,13 @@ func TestWarnLargeJSONSearchCountsSkipsSampleRun(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &ichsm.Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := &ichsm.Client{
+		BaseURL:               server.URL + "/",
+		HTTPClient:            server.Client(),
+		ENARequestsPerSecond:  -1,
+		NCBIRequestsPerSecond: -1,
+		MaxRequestRetries:     -1,
+	}
 	var stderr bytes.Buffer
 	warnLargeJSONSearchCounts(context.Background(), client, []accessionSearch{
 		{input: "SAMN05276490", fixed: "SAMN05276490", typ: ichsm.AccessionTypeSample},
@@ -1377,9 +1389,12 @@ func withTestClient(t *testing.T, server *httptest.Server) {
 	previous := newClient
 	newClient = func() *ichsm.Client {
 		return &ichsm.Client{
-			BaseURL:     server.URL,
-			NCBIBaseURL: server.URL,
-			HTTPClient:  server.Client(),
+			BaseURL:               server.URL,
+			NCBIBaseURL:           server.URL,
+			HTTPClient:            server.Client(),
+			ENARequestsPerSecond:  -1,
+			NCBIRequestsPerSecond: -1,
+			MaxRequestRetries:     -1,
 		}
 	}
 	t.Cleanup(func() {

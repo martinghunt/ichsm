@@ -4,9 +4,23 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 )
+
+func newTestClient(server *httptest.Server) *Client {
+	return &Client{
+		BaseURL:               server.URL + "/",
+		NCBIBaseURL:           server.URL + "/",
+		HTTPClient:            server.Client(),
+		ENARequestsPerSecond:  -1,
+		NCBIRequestsPerSecond: -1,
+		MaxRequestRetries:     -1,
+	}
+}
 
 func TestQuerySampleAtRunLevel(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +45,7 @@ func TestQuerySampleAtRunLevel(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, fields, records, err := client.Query(context.Background(), "SAMN05276490", AccessionTypeSample, []string{"DEFAULT"}, AccessionTypeRun)
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +87,7 @@ func TestQueryStudy(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, fields, records, err := client.Query(context.Background(), "PRJEB1787", AccessionTypeStudy, []string{"DEFAULT"}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +127,7 @@ func TestQueryPrimaryStudyAtRunLevelSkipsResolution(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, _, records, err := client.Query(context.Background(), "PRJEB1787", AccessionTypeStudy, []string{"run_accession"}, AccessionTypeRun)
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +161,7 @@ func TestCountPrimaryStudyAtRunLevelSkipsResolution(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, count, err := client.CountENA(context.Background(), "PRJEB1787", AccessionTypeStudy, AccessionTypeRun)
 	if err != nil {
 		t.Fatal(err)
@@ -160,6 +174,117 @@ func TestCountPrimaryStudyAtRunLevelSkipsResolution(t *testing.T) {
 	}
 	if requests != 1 {
 		t.Fatalf("requests = %d, want 1", requests)
+	}
+}
+
+func TestRequestRetriesTooManyRequestsWithRetryAfter(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if requests == 1 {
+			w.Header().Set("Retry-After", "0")
+			http.Error(w, "slow down", http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	client.MaxRequestRetries = 2
+	body, err := client.requestText(context.Background(), "search", url.Values{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body != "ok" {
+		t.Fatalf("body = %q, want ok", body)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
+	}
+}
+
+func TestRequestRetriesTransientServerError(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if requests == 1 {
+			http.Error(w, "try again", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	client.MaxRequestRetries = 2
+	client.RequestRetryBaseDelay = time.Millisecond
+	client.RequestRetryMaxDelay = time.Millisecond
+	body, err := client.requestText(context.Background(), "search", url.Values{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body != "ok" {
+		t.Fatalf("body = %q, want ok", body)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
+	}
+}
+
+func TestRequestStopsAfterRetryLimit(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Retry-After", "0")
+		http.Error(w, "still too many", http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	client.MaxRequestRetries = 1
+	_, err := client.requestText(context.Background(), "search", url.Values{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
+	}
+	for _, want := range []string{"after 2 attempts", "status=429", "still too many"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want substring %q", err, want)
+		}
+	}
+}
+
+func TestDefaultRateLimitIntervals(t *testing.T) {
+	client := NewClient()
+	if got := client.enaRateLimitInterval(); got != 40*time.Millisecond {
+		t.Fatalf("enaRateLimitInterval() = %v, want 40ms", got)
+	}
+
+	if got := client.ncbiRateLimitInterval(); got != time.Second/3 {
+		t.Fatalf("ncbiRateLimitInterval() = %v, want %v", got, time.Second/3)
+	}
+
+	client.NCBIAPIKey = "test-key"
+	if got := client.ncbiRateLimitInterval(); got != 100*time.Millisecond {
+		t.Fatalf("api key ncbiRateLimitInterval() = %v, want 100ms", got)
+	}
+
+	client.NCBIRequestsPerSecond = 7
+	if got := client.ncbiRateLimitInterval(); got != time.Second/7 {
+		t.Fatalf("custom ncbiRateLimitInterval() = %v, want %v", got, time.Second/7)
+	}
+
+	client.ENARequestsPerSecond = -1
+	if got := client.enaRateLimitInterval(); got != 0 {
+		t.Fatalf("disabled enaRateLimitInterval() = %v, want 0", got)
+	}
+
+	client.NCBIRequestsPerSecond = -1
+	if got := client.ncbiRateLimitInterval(); got != 0 {
+		t.Fatalf("disabled ncbiRateLimitInterval() = %v, want 0", got)
 	}
 }
 
@@ -183,7 +308,7 @@ func TestQueryWGSSet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, fields, records, err := client.Query(context.Background(), "AGQU01", AccessionTypeContigSet, []string{"DEFAULT"}, AccessionTypeAssembly)
 	if err != nil {
 		t.Fatal(err)
@@ -218,7 +343,7 @@ func TestQuerySequence(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, fields, records, err := client.Query(context.Background(), "U49845", AccessionTypeSequence, []string{"DEFAULT"}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -250,7 +375,7 @@ func TestQueryCoding(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, fields, records, err := client.Query(context.Background(), "AAA98665", AccessionTypeCoding, []string{"DEFAULT"}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -293,7 +418,7 @@ func TestQueryContigSetFallsBackToTSASet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, fields, records, err := client.Query(context.Background(), "GHIQ01", AccessionTypeContigSet, []string{"DEFAULT"}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -340,7 +465,7 @@ func TestQueryWithSourceAutoFallsBackToNCBIAssembly(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", NCBIBaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	source, resultType, fields, records, err := client.QueryWithSource(context.Background(), "GCF_000001405.40", "GCF_000001405", AccessionTypeAssembly, []string{"DEFAULT"}, "", SearchSourceAuto)
 	if err != nil {
 		t.Fatal(err)
@@ -397,7 +522,7 @@ func TestQuerySecondaryStudyAtSampleLevel(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, fields, records, err := client.Query(context.Background(), "ERP001736", AccessionTypeStudy, []string{"DEFAULT"}, AccessionTypeSample)
 	if err != nil {
 		t.Fatal(err)
@@ -454,7 +579,7 @@ func TestCountENASecondaryStudyAtRunLevel(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	resultType, count, err := client.CountENA(context.Background(), "ERP001736", AccessionTypeStudy, AccessionTypeRun)
 	if err != nil {
 		t.Fatal(err)
@@ -575,7 +700,7 @@ func TestGetAllowedFields(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	text, err := client.GetAllowedFields(context.Background(), "read_run")
 	if err != nil {
 		t.Fatal(err)
@@ -594,7 +719,7 @@ func TestGetResultTypes(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	client := newTestClient(server)
 	text, err := client.GetResultTypes(context.Background())
 	if err != nil {
 		t.Fatal(err)
