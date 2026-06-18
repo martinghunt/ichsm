@@ -48,7 +48,7 @@ func newReadsCommand() *cobra.Command {
 	flags.StringVarP(&opts.accession, "accession", "a", "", "Accession to find reads for")
 	flags.StringVarP(&opts.accFile, "acc-file", "f", "", "File of accessions to find reads for, one per line")
 	flags.StringVar(&opts.accFile, "acc_file", "", "File of accessions to find reads for, one per line")
-	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: manifest, table, urls, wget, curl, or md5")
+	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: manifest, table, ttable, ttsv, urls, wget, curl, or md5")
 	flags.StringVar(&opts.protocol, "protocol", opts.protocol, "Download URL protocol: https or ftp")
 	flags.StringVarP(&opts.outputDir, "output-dir", "o", "", "Directory to use in printed output filenames")
 	_ = flags.MarkHidden("acc_file")
@@ -101,6 +101,10 @@ func parseReadsOutfmt(outfmt string) (string, error) {
 		return readsFormatManifest, nil
 	case readsFormatTable, "human":
 		return readsFormatTable, nil
+	case outputFormatTTable:
+		return outputFormatTTable, nil
+	case outputFormatTTSV:
+		return outputFormatTTSV, nil
 	case readsFormatURLs:
 		return readsFormatURLs, nil
 	case readsFormatWget:
@@ -110,7 +114,7 @@ func parseReadsOutfmt(outfmt string) (string, error) {
 	case readsFormatMD5:
 		return readsFormatMD5, nil
 	default:
-		return "", fmt.Errorf("unsupported --outfmt %q; expected manifest, table, urls, wget, curl, or md5", outfmt)
+		return "", fmt.Errorf("unsupported --outfmt %q; expected manifest, table, ttable, ttsv, urls, wget, curl, or md5", outfmt)
 	}
 }
 
@@ -128,6 +132,10 @@ func writeReads(out io.Writer, files []ichsm.ReadFile, format string) error {
 		return writeReadsManifest(out, files)
 	case readsFormatTable:
 		return writeAlignedRows(out, readFilesRows(files))
+	case outputFormatTTable:
+		return writeTransposedTable(out, readFilesRows(files))
+	case outputFormatTTSV:
+		return writeTransposedDelimitedRows(out, readFilesRows(files), "\t")
 	case readsFormatURLs:
 		for _, file := range files {
 			fmt.Fprintln(out, file.URL)

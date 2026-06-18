@@ -19,9 +19,11 @@ var version = "local"
 var newClient = ichsm.NewClient
 
 const (
-	outputFormatJSON  = "json"
-	outputFormatTable = "table"
-	outputFormatTSV   = "tsv"
+	outputFormatJSON   = "json"
+	outputFormatTable  = "table"
+	outputFormatTTable = "ttable"
+	outputFormatTSV    = "tsv"
+	outputFormatTTSV   = "ttsv"
 )
 
 const largeJSONRecordWarningThreshold = 1000
@@ -97,7 +99,7 @@ func newSearchCommand() *cobra.Command {
 	flags.StringVar(&opts.source, "source", string(ichsm.SearchSourceAuto), "Metadata source: auto, ena, or ncbi")
 	flags.StringVar(&opts.apiKey, "api-key", "", "NCBI API key; defaults to NCBI_API_KEY")
 	flags.StringVar(&opts.email, "email", "", "Email sent to NCBI; defaults to NCBI_EMAIL")
-	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, or tsv")
+	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, tsv, ttable, or ttsv")
 	flags.BoolVar(&opts.count, "count", false, "Only count matching ENA records; do not fetch metadata")
 	_ = flags.MarkHidden("acc_file")
 
@@ -157,6 +159,12 @@ func executeSearch(cmd *cobra.Command, opts searchOptions) error {
 	if outfmt == outputFormatTable {
 		return writeTable(cmd.OutOrStdout(), results, fields)
 	}
+	if outfmt == outputFormatTTable {
+		return writeTransposedSearchTable(cmd.OutOrStdout(), results, fields)
+	}
+	if outfmt == outputFormatTTSV {
+		return writeTransposedSearchTSV(cmd.OutOrStdout(), results, fields)
+	}
 
 	return writeTSV(cmd.OutOrStdout(), results, fields)
 }
@@ -167,6 +175,10 @@ func parseOutputFormat(format string, allowJSON bool) (string, error) {
 		return outputFormatTSV, nil
 	case outputFormatTable, "human":
 		return outputFormatTable, nil
+	case outputFormatTTable:
+		return outputFormatTTable, nil
+	case outputFormatTTSV:
+		return outputFormatTTSV, nil
 	case outputFormatJSON:
 		if allowJSON {
 			return outputFormatJSON, nil
@@ -174,9 +186,9 @@ func parseOutputFormat(format string, allowJSON bool) (string, error) {
 	}
 
 	if allowJSON {
-		return "", fmt.Errorf("unsupported --outfmt %q; expected json, table, or tsv", format)
+		return "", fmt.Errorf("unsupported --outfmt %q; expected json, table, tsv, ttable, or ttsv", format)
 	}
-	return "", fmt.Errorf("unsupported --outfmt %q; expected table or tsv", format)
+	return "", fmt.Errorf("unsupported --outfmt %q; expected table, tsv, ttable, or ttsv", format)
 }
 
 func parseSearchLevel(level string) (ichsm.AccessionType, error) {
@@ -270,11 +282,17 @@ func newGetFieldsCommand() *cobra.Command {
 			if parsedOutfmt == outputFormatTable {
 				return writeAlignedRows(cmd.OutOrStdout(), tsvTextRows(text))
 			}
+			if parsedOutfmt == outputFormatTTable {
+				return writeTransposedTable(cmd.OutOrStdout(), tsvTextRows(text))
+			}
+			if parsedOutfmt == outputFormatTTSV {
+				return writeTransposedDelimitedRows(cmd.OutOrStdout(), tsvTextRows(text), "\t")
+			}
 			return writeTextWithTrailingNewline(cmd.OutOrStdout(), text)
 		},
 	}
 	cmd.Flags().BoolVar(&debug, "debug", false, "More verbose logging")
-	cmd.Flags().StringVar(&outfmt, "outfmt", outfmt, "Output format: table or tsv")
+	cmd.Flags().StringVar(&outfmt, "outfmt", outfmt, "Output format: table, tsv, ttable, or ttsv")
 	cmd.Flags().StringVar(&sortBy, "sort", sortBy, "Sort field rows: ichsm_columns")
 	return cmd
 }
@@ -637,6 +655,12 @@ func writeCountResults(out io.Writer, counts []countResult, outfmt string) error
 	if outfmt == outputFormatTable {
 		return writeAlignedRows(out, rows)
 	}
+	if outfmt == outputFormatTTable {
+		return writeTransposedTable(out, rows)
+	}
+	if outfmt == outputFormatTTSV {
+		return writeTransposedDelimitedRows(out, rows, "\t")
+	}
 	return writeDelimitedRows(out, rows, "\t")
 }
 
@@ -680,6 +704,22 @@ func writeTable(out io.Writer, results []ichsm.SearchResult, requestedFields []s
 		return err
 	}
 	return writeAlignedRows(out, rows)
+}
+
+func writeTransposedSearchTable(out io.Writer, results []ichsm.SearchResult, requestedFields []string) error {
+	rows, err := searchRows(results, requestedFields)
+	if err != nil {
+		return err
+	}
+	return writeTransposedTable(out, rows)
+}
+
+func writeTransposedSearchTSV(out io.Writer, results []ichsm.SearchResult, requestedFields []string) error {
+	rows, err := searchRows(results, requestedFields)
+	if err != nil {
+		return err
+	}
+	return writeTransposedDelimitedRows(out, rows, "\t")
 }
 
 func searchRows(results []ichsm.SearchResult, requestedFields []string) ([][]string, error) {

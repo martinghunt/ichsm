@@ -42,6 +42,32 @@ func writeDelimitedRows(out io.Writer, rows [][]string, delimiter string) error 
 	return nil
 }
 
+func writeTransposedTable(out io.Writer, rows [][]string) error {
+	return writeAlignedRows(out, transposeRows(rows))
+}
+
+func writeTransposedDelimitedRows(out io.Writer, rows [][]string, delimiter string) error {
+	return writeDelimitedRows(out, transposeRows(rows), delimiter)
+}
+
+func transposeRows(rows [][]string) [][]string {
+	width := maxRowWidth(rows)
+	if width == 0 {
+		return nil
+	}
+
+	transposed := make([][]string, width)
+	for columnIndex := 0; columnIndex < width; columnIndex++ {
+		transposed[columnIndex] = make([]string, len(rows))
+		for rowIndex, row := range rows {
+			if columnIndex < len(row) {
+				transposed[columnIndex][rowIndex] = row[columnIndex]
+			}
+		}
+	}
+	return transposed
+}
+
 func tsvTextRows(text string) [][]string {
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	if len(lines) == 1 && lines[0] == "" {

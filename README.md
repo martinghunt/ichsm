@@ -70,6 +70,16 @@ Get metadata for sample `SAMN05276490` as an aligned table:
 ichsm search -a SAMN05276490 --outfmt table
 ```
 
+Get metadata for sample `SAMN05276490` as a transposed aligned table:
+```
+ichsm search -a SAMN05276490 --outfmt ttable
+```
+
+Get metadata for sample `SAMN05276490` as transposed TSV:
+```
+ichsm search -a SAMN05276490 --outfmt ttsv
+```
+
 Get all available metadata for sample `SAMN05276490`:
 ```
 ichsm search -a SAMN05276490 -c ALL

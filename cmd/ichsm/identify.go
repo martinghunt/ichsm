@@ -42,7 +42,7 @@ func newIdentifyCommand() *cobra.Command {
 	flags.StringVarP(&opts.accession, "accession", "a", "", "Accession to identify")
 	flags.StringVarP(&opts.accFile, "acc-file", "f", "", "File of accessions to identify, one per line")
 	flags.StringVar(&opts.accFile, "acc_file", "", "File of accessions to identify, one per line")
-	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, or tsv")
+	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, tsv, ttable, or ttsv")
 	_ = flags.MarkHidden("acc_file")
 
 	return cmd
@@ -130,6 +130,12 @@ func writeIdentifyResults(out io.Writer, results []identifyResult, outfmt string
 	rows := identifyRows(results)
 	if outfmt == outputFormatTable {
 		return writeAlignedRows(out, rows)
+	}
+	if outfmt == outputFormatTTable {
+		return writeTransposedTable(out, rows)
+	}
+	if outfmt == outputFormatTTSV {
+		return writeTransposedDelimitedRows(out, rows, "\t")
 	}
 	return writeDelimitedRows(out, rows, "\t")
 }

@@ -262,6 +262,108 @@ func TestRunSearchWritesTable(t *testing.T) {
 	}
 }
 
+func TestRunSearchWritesTTable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "sample" {
+			t.Fatalf("result = %q, want sample", got)
+		}
+		if got := query.Get("fields"); got != "sample_accession,description" {
+			t.Fatalf("fields = %q", got)
+		}
+		_, _ = w.Write([]byte(`[{"sample_accession":"SAMN05276490","description":"sample description"}]`))
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"search", "-a", "SAMN05276490", "--columns", "sample_accession,description", "--outfmt", "ttable"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "input_accession   SAMN05276490\n" +
+		"sample_accession  SAMN05276490\n" +
+		"description       sample description\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestRunSearchWritesTTSV(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "sample" {
+			t.Fatalf("result = %q, want sample", got)
+		}
+		if got := query.Get("fields"); got != "sample_accession,description" {
+			t.Fatalf("fields = %q", got)
+		}
+		_, _ = w.Write([]byte(`[{"sample_accession":"SAMN05276490","description":"sample description"}]`))
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"search", "-a", "SAMN05276490", "--columns", "sample_accession,description", "--outfmt", "ttsv"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "input_accession\tSAMN05276490\n" +
+		"sample_accession\tSAMN05276490\n" +
+		"description\tsample description\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestParseOutputFormatTransposedFormats(t *testing.T) {
+	tests := map[string]string{
+		"ttable": outputFormatTTable,
+		"ttsv":   outputFormatTTSV,
+	}
+	for format, want := range tests {
+		t.Run(format, func(t *testing.T) {
+			got, err := parseOutputFormat(format, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != want {
+				t.Fatalf("parseOutputFormat(%q) = %q, want %q", format, got, want)
+			}
+		})
+	}
+}
+
+func TestParseReadsOutfmtTransposedFormats(t *testing.T) {
+	tests := map[string]string{
+		"ttable": outputFormatTTable,
+		"ttsv":   outputFormatTTSV,
+	}
+	for format, want := range tests {
+		t.Run(format, func(t *testing.T) {
+			got, err := parseReadsOutfmt(format)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != want {
+				t.Fatalf("parseReadsOutfmt(%q) = %q, want %q", format, got, want)
+			}
+		})
+	}
+}
+
 func TestRunSearchWithLevel(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {
@@ -1448,6 +1550,62 @@ func TestWriteReadsCurl(t *testing.T) {
 	}
 
 	const want = "curl -L --fail --continue-at - --output 'reads/file.fastq.gz' 'https://ftp.sra.ebi.ac.uk/file.fastq.gz'\n"
+	if out.String() != want {
+		t.Fatalf("stdout = %q, want %q", out.String(), want)
+	}
+}
+
+func TestWriteReadsTTable(t *testing.T) {
+	files := []ichsm.ReadFile{
+		{
+			InputAccession: "SAMN05276490",
+			RunAccession:   "SRR3675520",
+			Filename:       "read.fastq.gz",
+			URL:            "https://ftp.sra.ebi.ac.uk/read.fastq.gz",
+			MD5:            "abc",
+			Bytes:          "10",
+		},
+	}
+
+	var out bytes.Buffer
+	if err := writeReads(&out, files, outputFormatTTable); err != nil {
+		t.Fatal(err)
+	}
+
+	const want = "input_accession  SAMN05276490\n" +
+		"run_accession    SRR3675520\n" +
+		"filename         read.fastq.gz\n" +
+		"url              https://ftp.sra.ebi.ac.uk/read.fastq.gz\n" +
+		"md5              abc\n" +
+		"bytes            10\n"
+	if out.String() != want {
+		t.Fatalf("stdout = %q, want %q", out.String(), want)
+	}
+}
+
+func TestWriteReadsTTSV(t *testing.T) {
+	files := []ichsm.ReadFile{
+		{
+			InputAccession: "SAMN05276490",
+			RunAccession:   "SRR3675520",
+			Filename:       "read.fastq.gz",
+			URL:            "https://ftp.sra.ebi.ac.uk/read.fastq.gz",
+			MD5:            "abc",
+			Bytes:          "10",
+		},
+	}
+
+	var out bytes.Buffer
+	if err := writeReads(&out, files, outputFormatTTSV); err != nil {
+		t.Fatal(err)
+	}
+
+	const want = "input_accession\tSAMN05276490\n" +
+		"run_accession\tSRR3675520\n" +
+		"filename\tread.fastq.gz\n" +
+		"url\thttps://ftp.sra.ebi.ac.uk/read.fastq.gz\n" +
+		"md5\tabc\n" +
+		"bytes\t10\n"
 	if out.String() != want {
 		t.Fatalf("stdout = %q, want %q", out.String(), want)
 	}
