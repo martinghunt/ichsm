@@ -248,26 +248,15 @@ func (c *Client) queryENA(ctx context.Context, accession string, accessionType A
 		}
 	}
 
-	searchKey, searchValue, err := SearchKeyValue(accessionType, resultType, accession)
-	if err != nil {
-		return "", nil, nil, err
-	}
-
-	endpoint, ok := urlSearchData[resultType]
-	if !ok {
-		return "", nil, nil, fmt.Errorf("unsupported accession type %q", resultType)
-	}
-
 	resolvedFields, err := ResolveFields(resultType, fields)
 	if err != nil {
 		return "", nil, nil, err
 	}
 
-	params := url.Values{}
-	params.Set("result", endpoint.result)
-	params.Set(searchKey, searchValue)
-	params.Set("format", "json")
-	params.Set("fields", strings.Join(resolvedFields, ","))
+	endpoint, params, err := enaSearchParams(accession, accessionType, resultType, resolvedFields, nil)
+	if err != nil {
+		return "", nil, nil, err
+	}
 
 	results, err := c.requestJSON(ctx, endpoint.mainType, params)
 	if err != nil {
@@ -284,23 +273,17 @@ func (c *Client) queryENAContigSet(ctx context.Context, accession string, access
 	var lastFields []string
 	var lastErr error
 	for _, resultType := range candidates {
-		searchKey, searchValue, err := SearchKeyValue(accessionType, resultType, accession)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		endpoint := urlSearchData[resultType]
 		resolvedFields, err := ResolveFields(resultType, fields)
 		if err != nil {
 			lastErr = err
 			continue
 		}
 
-		params := url.Values{}
-		params.Set("result", endpoint.result)
-		params.Set(searchKey, searchValue)
-		params.Set("format", "json")
-		params.Set("fields", strings.Join(resolvedFields, ","))
+		endpoint, params, err := enaSearchParams(accession, accessionType, resultType, resolvedFields, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
 		records, err := c.requestJSON(ctx, endpoint.mainType, params)
 		if err != nil {
@@ -323,6 +306,27 @@ func (c *Client) queryENAContigSet(ctx context.Context, accession string, access
 		lastFields, _ = ResolveFields(AccessionTypeContigSet, fields)
 	}
 	return lastResultType, lastFields, nil, nil
+}
+
+func enaSearchParams(accession string, accessionType AccessionType, resultType AccessionType, fields []string, filters map[string]string) (searchEndpoint, url.Values, error) {
+	searchKey, searchValue, err := SearchKeyValue(accessionType, resultType, accession)
+	if err != nil {
+		return searchEndpoint{}, nil, err
+	}
+
+	endpoint, ok := urlSearchData[resultType]
+	if !ok {
+		return searchEndpoint{}, nil, fmt.Errorf("unsupported accession type %q", resultType)
+	}
+
+	params := url.Values{}
+	params.Set("result", endpoint.result)
+	params.Set(searchKey, filteredENAQuery(searchValue, filters))
+	params.Set("format", "json")
+	if len(fields) > 0 {
+		params.Set("fields", strings.Join(fields, ","))
+	}
+	return endpoint, params, nil
 }
 
 // CountENA returns the number of ENA records matching one normalized accession
@@ -398,20 +402,10 @@ func (c *Client) countENAResultType(ctx context.Context, accession string, acces
 }
 
 func (c *Client) countENAResultTypeFiltered(ctx context.Context, accession string, accessionType AccessionType, resultType AccessionType, filters map[string]string) (int, error) {
-	searchKey, searchValue, err := SearchKeyValue(accessionType, resultType, accession)
+	_, params, err := enaSearchParams(accession, accessionType, resultType, nil, filters)
 	if err != nil {
 		return 0, err
 	}
-
-	endpoint, ok := urlSearchData[resultType]
-	if !ok {
-		return 0, fmt.Errorf("unsupported accession type %q", resultType)
-	}
-
-	params := url.Values{}
-	params.Set("result", endpoint.result)
-	params.Set(searchKey, filteredENAQuery(searchValue, filters))
-	params.Set("format", "json")
 	return c.requestCount(ctx, params)
 }
 
@@ -569,17 +563,10 @@ func SupportsNCBI(accessionType AccessionType) bool {
 }
 
 func (c *Client) resolvePrimaryStudyAccession(ctx context.Context, accession string) (string, error) {
-	searchKey, searchValue, err := SearchKeyValue(AccessionTypeStudy, AccessionTypeStudy, accession)
+	endpoint, params, err := enaSearchParams(accession, AccessionTypeStudy, AccessionTypeStudy, []string{"study_accession"}, nil)
 	if err != nil {
 		return "", err
 	}
-
-	endpoint := urlSearchData[AccessionTypeStudy]
-	params := url.Values{}
-	params.Set("result", endpoint.result)
-	params.Set(searchKey, searchValue)
-	params.Set("format", "json")
-	params.Set("fields", "study_accession")
 
 	results, err := c.requestJSON(ctx, endpoint.mainType, params)
 	if err != nil {
