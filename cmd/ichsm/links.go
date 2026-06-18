@@ -127,16 +127,17 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 		for _, record := range studyRecords {
 			builder.addStudyRecordPath(record, accession)
 		}
+		searchAccession := linkPrimaryStudyAccession(studyRecords, accession)
 
-		runRecords, err := queryLinkRunRecords(ctx, client, accession, accessionType)
+		runRecords, err := queryLinkRunRecords(ctx, client, searchAccession, accessionType)
 		if err != nil {
 			return nil, err
 		}
 		for _, record := range runRecords {
-			builder.addRunRecordPath(record, accessionType, accession)
+			builder.addRunRecordPath(record, accessionType, searchAccession)
 		}
 
-		contigSetRecords, err := queryLinkContigSetRecords(ctx, client, accession, accessionType)
+		contigSetRecords, err := queryLinkContigSetRecords(ctx, client, searchAccession, accessionType)
 		if err != nil {
 			return nil, err
 		}
@@ -285,6 +286,15 @@ func recordSampleAccessions(records []ichsm.Record) []string {
 		}
 	}
 	return accessions
+}
+
+func linkPrimaryStudyAccession(records []ichsm.Record, fallback string) string {
+	for _, record := range records {
+		if accession := recordLinkString(record, "study_accession"); accession != "" {
+			return accession
+		}
+	}
+	return fallback
 }
 
 func linkContigSetLevels(accessionType ichsm.AccessionType) []ichsm.AccessionType {

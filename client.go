@@ -201,7 +201,7 @@ func (c *Client) queryENA(ctx context.Context, accession string, accessionType A
 		return c.queryENAContigSet(ctx, accession, accessionType, fields)
 	}
 
-	if accessionType == AccessionTypeStudy && resultType != AccessionTypeStudy {
+	if accessionType == AccessionTypeStudy && resultType != AccessionTypeStudy && !isPrimaryStudyAccession(accession) {
 		accession, err = c.resolvePrimaryStudyAccession(ctx, accession)
 		if err != nil {
 			return "", nil, nil, err
@@ -300,7 +300,7 @@ func (c *Client) countENA(ctx context.Context, accession string, accessionType A
 		return c.countENAContigSet(ctx, accession, accessionType)
 	}
 
-	if accessionType == AccessionTypeStudy && resultType != AccessionTypeStudy {
+	if accessionType == AccessionTypeStudy && resultType != AccessionTypeStudy && !isPrimaryStudyAccession(accession) {
 		accession, err = c.resolvePrimaryStudyAccession(ctx, accession)
 		if err != nil {
 			return "", 0, err

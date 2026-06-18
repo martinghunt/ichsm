@@ -544,15 +544,13 @@ func TestRunLinksWritesProjectTree(t *testing.T) {
 		query := r.URL.Query()
 		switch query.Get("result") {
 		case "study":
-			if got := query.Get("query"); got != "study_accession=PRJNA302362 OR secondary_study_accession=PRJNA302362" {
+			if got := query.Get("query"); got != "study_accession=SRP076676 OR secondary_study_accession=SRP076676" {
 				t.Fatalf("query = %q", got)
 			}
-			switch got := query.Get("fields"); got {
-			case strings.Join(linkStudyFields, ","), "study_accession":
-				_, _ = w.Write([]byte(`[{"study_accession":"PRJNA302362","secondary_study_accession":"SRP076676"}]`))
-			default:
+			if got := query.Get("fields"); got != strings.Join(linkStudyFields, ",") {
 				t.Fatalf("fields = %q", got)
 			}
+			_, _ = w.Write([]byte(`[{"study_accession":"PRJNA302362","secondary_study_accession":"SRP076676"}]`))
 		case "read_run":
 			if got := query.Get("query"); got != "study_accession=PRJNA302362" {
 				t.Fatalf("query = %q", got)
@@ -589,7 +587,7 @@ func TestRunLinksWritesProjectTree(t *testing.T) {
 
 	withTestClient(t, server)
 	code, stdout := captureStdout(t, func() int {
-		return run([]string{"links", "PRJNA302362"})
+		return run([]string{"links", "SRP076676"})
 	})
 
 	if code != 0 {

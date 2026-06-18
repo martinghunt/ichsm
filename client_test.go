@@ -92,6 +92,77 @@ func TestQueryStudy(t *testing.T) {
 	}
 }
 
+func TestQueryPrimaryStudyAtRunLevelSkipsResolution(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "read_run" {
+			t.Fatalf("result = %q, want read_run; primary study accessions should not be resolved first", got)
+		}
+		if got := query.Get("query"); got != "study_accession=PRJEB1787" {
+			t.Fatalf("query = %q", got)
+		}
+		if got := query.Get("fields"); got != "run_accession" {
+			t.Fatalf("fields = %q", got)
+		}
+		_, _ = w.Write([]byte(`[{"run_accession":"ERR123456"}]`))
+	}))
+	defer server.Close()
+
+	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	resultType, _, records, err := client.Query(context.Background(), "PRJEB1787", AccessionTypeStudy, []string{"run_accession"}, AccessionTypeRun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultType != AccessionTypeRun {
+		t.Fatalf("resultType = %q, want %q", resultType, AccessionTypeRun)
+	}
+	if len(records) != 1 || records[0]["run_accession"] != "ERR123456" {
+		t.Fatalf("records = %#v", records)
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
+	}
+}
+
+func TestCountPrimaryStudyAtRunLevelSkipsResolution(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Path != "/count" {
+			t.Fatalf("path = %q, want /count", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "read_run" {
+			t.Fatalf("result = %q, want read_run; primary study accessions should not be resolved first", got)
+		}
+		if got := query.Get("query"); got != "study_accession=PRJEB1787" {
+			t.Fatalf("query = %q", got)
+		}
+		_, _ = w.Write([]byte(`{"count":"2"}`))
+	}))
+	defer server.Close()
+
+	client := &Client{BaseURL: server.URL + "/", HTTPClient: server.Client()}
+	resultType, count, err := client.CountENA(context.Background(), "PRJEB1787", AccessionTypeStudy, AccessionTypeRun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultType != AccessionTypeRun {
+		t.Fatalf("resultType = %q, want %q", resultType, AccessionTypeRun)
+	}
+	if count != 2 {
+		t.Fatalf("count = %d, want 2", count)
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
+	}
+}
+
 func TestQueryWGSSet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search" {

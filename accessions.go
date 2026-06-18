@@ -47,6 +47,8 @@ var accessionRegexes = []accessionRegex{
 	{re: regexp.MustCompile(`^([A-Z]{4}[0-9]{8,}|[A-Z]{6}[0-9]{9,})(\.[0-9]+)*$`), typ: AccessionTypeSequence, normalize: firstAccessionMatch},
 }
 
+var primaryStudyAccessionRE = regexp.MustCompile(`^PRJ(?:E|D|N)[A-Z][0-9]+$`)
+
 // IdentifyAccession returns the normalized accession, its type, and whether it
 // was recognized. Version suffixes are stripped where the metadata APIs expect
 // core accessions. WGS/TSA/TLS master accessions are normalized to their set id.
@@ -63,6 +65,10 @@ func IdentifyAccession(accession string) (string, AccessionType, bool) {
 	}
 
 	return "", "", false
+}
+
+func isPrimaryStudyAccession(accession string) bool {
+	return primaryStudyAccessionRE.MatchString(strings.ToUpper(strings.TrimSpace(accession)))
 }
 
 func isReservedSRASecondaryPrefix(accession string) bool {
