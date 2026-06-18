@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/martinghunt/ichsm"
@@ -126,15 +125,7 @@ func executeSummary(cmd *cobra.Command, accession string, opts summaryOptions) e
 		return err
 	}
 
-	client := newClient()
-	if opts.apiKey == "" {
-		opts.apiKey = os.Getenv("NCBI_API_KEY")
-	}
-	if opts.email == "" {
-		opts.email = os.Getenv("NCBI_EMAIL")
-	}
-	client.NCBIAPIKey = opts.apiKey
-	client.NCBIEmail = opts.email
+	client := newNCBIConfiguredClient(opts.apiKey, opts.email)
 
 	summary, err := summarizeAccession(cmd.Context(), client, accession, source)
 	if err != nil {

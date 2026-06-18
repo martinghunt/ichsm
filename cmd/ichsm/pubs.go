@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/martinghunt/ichsm"
@@ -42,15 +41,7 @@ func executePubs(cmd *cobra.Command, accession string, opts pubsOptions) error {
 		return err
 	}
 
-	client := newClient()
-	if opts.apiKey == "" {
-		opts.apiKey = os.Getenv("NCBI_API_KEY")
-	}
-	if opts.email == "" {
-		opts.email = os.Getenv("NCBI_EMAIL")
-	}
-	client.NCBIAPIKey = opts.apiKey
-	client.NCBIEmail = opts.email
+	client := newNCBIConfiguredClient(opts.apiKey, opts.email)
 
 	publications, err := client.Publications(cmd.Context(), accession)
 	if err != nil {

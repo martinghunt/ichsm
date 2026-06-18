@@ -60,6 +60,19 @@ func newRootCommand(out io.Writer, errOut io.Writer) *cobra.Command {
 	return cmd
 }
 
+func newNCBIConfiguredClient(apiKey string, email string) *ichsm.Client {
+	client := newClient()
+	if apiKey == "" {
+		apiKey = os.Getenv("NCBI_API_KEY")
+	}
+	if email == "" {
+		email = os.Getenv("NCBI_EMAIL")
+	}
+	client.NCBIAPIKey = apiKey
+	client.NCBIEmail = email
+	return client
+}
+
 type searchOptions struct {
 	accession string
 	accFile   string
@@ -129,15 +142,7 @@ func executeSearch(cmd *cobra.Command, opts searchOptions) error {
 		return err
 	}
 
-	client := newClient()
-	if opts.apiKey == "" {
-		opts.apiKey = os.Getenv("NCBI_API_KEY")
-	}
-	if opts.email == "" {
-		opts.email = os.Getenv("NCBI_EMAIL")
-	}
-	client.NCBIAPIKey = opts.apiKey
-	client.NCBIEmail = opts.email
+	client := newNCBIConfiguredClient(opts.apiKey, opts.email)
 
 	if opts.count {
 		counts, err := countAccessions(cmd.Context(), client, accessions, level, source, cmd.ErrOrStderr())
