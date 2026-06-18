@@ -1,0 +1,131 @@
+# ichsm
+
+`ichsm` (ICanHazSequenceMetadata) finds sequence metadata from ENA and NCBI.
+
+It recognises run, experiment, sample, study/project, assembly, nucleotide
+sequence, coding/protein, analysis, and WGS/TSA/TLS contig set accessions.
+`ichsm search` uses `--source auto` by default: it queries ENA first where
+applicable, then falls back to NCBI for accessions such as `GCF_`, `NC_`, and
+`WP_`.
+
+Source code: [github.com/martinghunt/ichsm](https://github.com/martinghunt/ichsm)
+
+## What it looks like
+
+These shortened examples show the shape of the output.
+
+Check what an accession is:
+
+```text
+$ ichsm identify SAMN05276490
+input_accession  normalized_accession  type    description       ena_search  ncbi_search
+SAMN05276490     SAMN05276490           sample  Sample accession  yes         no
+```
+
+Choose a few metadata columns:
+
+```text
+$ ichsm search -a SAMN05276490 --columns sample_accession,scientific_name,country --outfmt table
+input_accession  sample_accession  scientific_name             country
+SAMN05276490     SAMN05276490      Mycobacterium tuberculosis  United Kingdom: Oxford
+```
+
+Follow sample, assembly, and contig set links:
+
+```text
+$ ichsm links SAMN02471593
+Project: PRJNA73255
+└── Sample: SAMN02471593
+    └── Assembly: GCA_000231155
+        └── ContigSet: AGQU01000000
+```
+
+Turn read metadata into download commands:
+
+```text
+$ ichsm reads -a SAMN05276490 --outfmt wget --output-dir reads
+wget -c -O 'reads/SRR3675520_1.fastq.gz' 'https://.../SRR3675520_1.fastq.gz'
+wget -c -O 'reads/SRR3675520_2.fastq.gz' 'https://.../SRR3675520_2.fastq.gz'
+```
+
+## Quick start
+
+1. Install `ichsm`.
+2. Check an accession type:
+
+   ```
+   ichsm identify SAMN05276490
+   ```
+
+3. Get sample metadata:
+
+   ```
+   ichsm search -a SAMN05276490
+   ```
+
+4. Summarize a project:
+
+   ```
+   ichsm summary PRJEB1787
+   ```
+
+5. Print FASTQ download commands:
+
+   ```
+   ichsm reads -a SAMN05276490 --outfmt wget --output-dir reads
+   ```
+
+6. Show linked project, sample, assembly, experiment, run, analysis, and
+   contig set accessions:
+
+   ```
+   ichsm links SRR3675520
+   ```
+
+7. Show PubMed publications linked to a project:
+
+   ```
+   ichsm pubs PRJEB1787
+   ```
+
+8. Open an accession in your browser:
+
+   ```
+   ichsm open GCF_000001405.40
+   ```
+
+9. List ENA fields for run metadata:
+
+   ```
+   ichsm get_fields read_run
+   ```
+
+10. Generate shell completion:
+
+   ```
+   ichsm completion zsh
+   ```
+
+Most commands default to TSV or an aligned table. See
+[Output formats](output-formats.md) for the formats supported by each command.
+See [Fields and columns](fields-and-columns.md) for choosing metadata columns.
+
+For more detail, see:
+
+```{toctree}
+:maxdepth: 2
+:caption: Contents
+
+install
+output-formats
+fields-and-columns
+identify
+search-command
+get-fields
+summary
+reads
+links
+pubs
+open
+completion
+```

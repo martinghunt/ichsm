@@ -17,3 +17,8 @@ coverage.out
 # Generic logs/databases
 *.log
 db.sqlite3
+
+# Docs / local Python outputs
+docs/_build/
+__pycache__/
+*.pyc

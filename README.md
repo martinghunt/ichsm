@@ -1,6 +1,6 @@
 # ichsm
 
-Finding sequence metadata from ENA and NCBI.
+ICanHazSequenceMetadata: finding sequence metadata from ENA and NCBI.
 
 Currently supported: run, experiment, sample, study/project, assembly, INSDC sequence/coding,
 WGS/TSA/TLS contig set, and selected NCBI/RefSeq accessions. `ichsm search`
@@ -10,6 +10,8 @@ falls back to NCBI for accessions such as `GCF_`, `NC_`, and `WP_`.
 This repository was developed with substantial coding assistance from
 [OpenAI Codex](https://openai.com/codex), which helped with implementation,
 refactoring, tests, documentation, and benchmarking under human direction and review.
+
+Documentation: [ichsm.readthedocs.io](https://ichsm.readthedocs.io/en/)
 
 
 ## Install
@@ -39,6 +41,45 @@ For a cross-platform release build:
 
 ```
 ./build.sh --release --version v1.2.3
+```
+
+
+## What it looks like
+
+These shortened examples show the shape of the output.
+
+Check what an accession is:
+
+```text
+$ ichsm identify SAMN05276490
+input_accession  normalized_accession  type    description       ena_search  ncbi_search
+SAMN05276490     SAMN05276490           sample  Sample accession  yes         no
+```
+
+Choose a few metadata columns:
+
+```text
+$ ichsm search -a SAMN05276490 --columns sample_accession,scientific_name,country --outfmt table
+input_accession  sample_accession  scientific_name             country
+SAMN05276490     SAMN05276490      Mycobacterium tuberculosis  United Kingdom: Oxford
+```
+
+Follow sample, assembly, and contig set links:
+
+```text
+$ ichsm links SAMN02471593
+Project: PRJNA73255
+└── Sample: SAMN02471593
+    └── Assembly: GCA_000231155
+        └── ContigSet: AGQU01000000
+```
+
+Turn read metadata into download commands:
+
+```text
+$ ichsm reads -a SAMN05276490 --outfmt wget --output-dir reads
+wget -c -O 'reads/SRR3675520_1.fastq.gz' 'https://.../SRR3675520_1.fastq.gz'
+wget -c -O 'reads/SRR3675520_2.fastq.gz' 'https://.../SRR3675520_2.fastq.gz'
 ```
 
 
@@ -306,6 +347,20 @@ Before tagging, run:
 ```
 go test ./...
 ./build.sh
+```
+
+Build the documentation locally with:
+
+```
+python3 -m pip install -r docs/requirements.txt
+python3 -m sphinx -b html docs docs/_build/html
+```
+
+Then open `docs/_build/html/index.html` in a browser. For live rebuilds while
+editing docs, run:
+
+```
+python3 -m sphinx_autobuild docs docs/_build/html
 ```
 
 Then create and push the release tag:

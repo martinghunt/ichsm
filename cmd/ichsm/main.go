@@ -107,7 +107,7 @@ func newSearchCommand() *cobra.Command {
 	flags.StringVar(&opts.accFile, "acc_file", "", "File of accessions to search for, one per line")
 	flags.StringVarP(&opts.columns, "columns", "c", opts.columns, "Columns/fields to output, comma-separated, or SMALL, DEFAULT, BIG, ALL")
 	flags.StringVar(&opts.columns, "fields", opts.columns, "Columns/fields to output, comma-separated, or SMALL, DEFAULT, BIG, ALL")
-	flags.StringVar(&opts.level, "level", "", "Output level: study, sample, run, assembly, sequence, coding, contig_set, wgs_set, tsa_set, or tls_set. Default is the input accession level")
+	flags.StringVar(&opts.level, "level", "", "Output level: study, sample, run, assembly, sequence, coding, analysis, contig_set, wgs_set, tsa_set, or tls_set. Default is the input accession level")
 	flags.StringVar(&opts.source, "source", string(ichsm.SearchSourceAuto), "Metadata source: auto, ena, or ncbi")
 	flags.StringVar(&opts.apiKey, "api-key", "", "NCBI API key; defaults to NCBI_API_KEY")
 	flags.StringVar(&opts.email, "email", "", "Email address sent to NCBI; defaults to NCBI_EMAIL")
