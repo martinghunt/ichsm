@@ -98,7 +98,7 @@ func newSearchCommand() *cobra.Command {
 	flags.StringVar(&opts.level, "level", "", "Output level: study, sample, run, assembly, sequence, coding, contig_set, wgs_set, tsa_set, or tls_set. Default is the input accession level")
 	flags.StringVar(&opts.source, "source", string(ichsm.SearchSourceAuto), "Metadata source: auto, ena, or ncbi")
 	flags.StringVar(&opts.apiKey, "api-key", "", "NCBI API key; defaults to NCBI_API_KEY")
-	flags.StringVar(&opts.email, "email", "", "Email sent to NCBI; defaults to NCBI_EMAIL")
+	flags.StringVar(&opts.email, "email", "", "Email address sent to NCBI; defaults to NCBI_EMAIL")
 	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, tsv, ttable, or ttsv")
 	flags.BoolVar(&opts.count, "count", false, "Only count matching ENA records; do not fetch metadata")
 	_ = flags.MarkHidden("acc_file")
