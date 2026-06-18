@@ -534,27 +534,9 @@ func addSourceToRecords(records []Record, source SearchSource) {
 	}
 }
 
-func supportsENA(accessionType AccessionType) bool {
-	switch accessionType {
-	case AccessionTypeAssembly, AccessionTypeContigSet, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet, AccessionTypeSequence, AccessionTypeCoding, AccessionTypeStudy, AccessionTypeSample, AccessionTypeRun, AccessionTypeExperiment, AccessionTypeAnalysis:
-		return true
-	default:
-		return false
-	}
-}
-
 // SupportsENA reports whether ichsm has an ENA search route for an accession type.
 func SupportsENA(accessionType AccessionType) bool {
 	return supportsENA(accessionType)
-}
-
-func supportsNCBI(accessionType AccessionType) bool {
-	switch accessionType {
-	case AccessionTypeAssembly, AccessionTypeContigSet, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet, AccessionTypeSequence, AccessionTypeCoding:
-		return true
-	default:
-		return false
-	}
 }
 
 // SupportsNCBI reports whether ichsm has an NCBI search route for an accession type.

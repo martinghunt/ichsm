@@ -774,6 +774,24 @@ func TestFieldPresetLevelForResult(t *testing.T) {
 	}
 }
 
+func TestAccessionTypeMetadataSupport(t *testing.T) {
+	if !SupportsENAResult("read_run") {
+		t.Fatal("read_run should be an ichsm-supported ENA result type")
+	}
+	if SupportsENAResult("taxon") {
+		t.Fatal("taxon should not be an ichsm-supported ENA result type")
+	}
+	if !SupportsNCBIBrowser(AccessionTypeRun) {
+		t.Fatal("run accessions should have NCBI browser support")
+	}
+	if SupportsNCBI(AccessionTypeRun) {
+		t.Fatal("run accessions should not have NCBI metadata search support")
+	}
+	if db, ok := ncbiDatabase(AccessionTypeSequence); !ok || db != "nuccore" {
+		t.Fatalf("ncbiDatabase(sequence) = %q, %v; want nuccore, true", db, ok)
+	}
+}
+
 func TestGetAllowedFields(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/searchFields" {

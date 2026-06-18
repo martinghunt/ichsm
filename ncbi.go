@@ -80,19 +80,6 @@ func ResolveNCBIResultLevel(inputType AccessionType, level AccessionType) (Acces
 	return "", unsupportedSearchLevel(inputType, level)
 }
 
-func ncbiDatabase(resultType AccessionType) (string, bool) {
-	switch resultType {
-	case AccessionTypeAssembly:
-		return "assembly", true
-	case AccessionTypeSequence:
-		return "nuccore", true
-	case AccessionTypeCoding:
-		return "protein", true
-	default:
-		return "", false
-	}
-}
-
 func ncbiAccessionCandidates(inputAccession string, accession string, accessionType AccessionType) []string {
 	candidates := make([]string, 0, 4)
 	add := func(candidate string) {

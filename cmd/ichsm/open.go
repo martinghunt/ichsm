@@ -119,7 +119,7 @@ func openBrowserSource(accession string, accessionType ichsm.AccessionType, sour
 		if enaBrowserSupports(accession, accessionType) {
 			return ichsm.SearchSourceENA, nil
 		}
-		if ncbiBrowserSupports(accessionType) {
+		if ichsm.SupportsNCBIBrowser(accessionType) {
 			return ichsm.SearchSourceNCBI, nil
 		}
 	case ichsm.SearchSourceENA:
@@ -128,7 +128,7 @@ func openBrowserSource(accession string, accessionType ichsm.AccessionType, sour
 		}
 		return "", fmt.Errorf("accession is not supported by the ENA browser: %s", accession)
 	case ichsm.SearchSourceNCBI:
-		if ncbiBrowserSupports(accessionType) {
+		if ichsm.SupportsNCBIBrowser(accessionType) {
 			return ichsm.SearchSourceNCBI, nil
 		}
 		return "", fmt.Errorf("accession is not supported by the NCBI browser: %s", accession)
@@ -146,15 +146,6 @@ func enaBrowserSupports(accession string, accessionType ichsm.AccessionType) boo
 		return !strings.Contains(upper, "_")
 	default:
 		return true
-	}
-}
-
-func ncbiBrowserSupports(accessionType ichsm.AccessionType) bool {
-	switch accessionType {
-	case ichsm.AccessionTypeAssembly, ichsm.AccessionTypeContigSet, ichsm.AccessionTypeWGSSet, ichsm.AccessionTypeTSASet, ichsm.AccessionTypeTLSSet, ichsm.AccessionTypeSequence, ichsm.AccessionTypeCoding, ichsm.AccessionTypeRun:
-		return true
-	default:
-		return false
 	}
 }
 

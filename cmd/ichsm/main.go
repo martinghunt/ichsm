@@ -329,7 +329,7 @@ func appendICHSMSearchColumn(text string) string {
 		}
 		rows = append(rows, resultTypeRow{
 			resultType: fields[0],
-			supported:  ichsmSearchSupportsResult(fields[0]),
+			supported:  ichsm.SupportsENAResult(fields[0]),
 			line:       line,
 		})
 	}
@@ -452,15 +452,6 @@ func ichsmColumnPresetRank(level string) int {
 		return 3
 	default:
 		return 4
-	}
-}
-
-func ichsmSearchSupportsResult(resultType string) bool {
-	switch resultType {
-	case "analysis", "assembly", "coding", "read_run", "sample", "sequence", "study", "tls_set", "tsa_set", "wgs_set":
-		return true
-	default:
-		return false
 	}
 }
 
