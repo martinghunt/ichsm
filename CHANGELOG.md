@@ -7,13 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-18
+
 ### Added
 - Add `ichsm summary <accession>` to report a compact accession rollup with linked IDs, cheap ENA counts, sequencing platform counts, and project publication counts.
 - Add `ichsm links <accession>` to print ENA project, sample, assembly, experiment, run, analysis, and WGS/TSA/TLS contig set relationships as a project-first tree.
-- Add `ichsm links --outfmt table|tsv|json`, with tabular output represented as parent-child edge rows and JSON output represented as the link tree.
+- Add `ichsm links --outfmt table|tsv|json`, with tabular output represented as parent/child rows and JSON output represented as the link tree.
 - Add `ichsm pubs <project_accession>` to report PubMed publications linked through ENA project xrefs and NCBI BioProject links, including immediate parent projects.
 - Add ENA analysis accession support, including `ERZ`, `DRZ`, and `SRZ` accessions.
-- Add `--outfmt ttable` and `--outfmt ttsv` for row-oriented output, equivalent to transposing the normal tabular rows before table or TSV formatting.
+- Add `--outfmt ttable` and `--outfmt ttsv` for tabular output, equivalent to transposing the normal rows before table or TSV formatting.
+- Add Read the Docs documentation with install, quick start, output format, fields/columns, and command reference pages.
 
 ### Changed
 - Avoid redundant ENA study-resolution requests when `links` or count/search queries already have a primary `PRJ...` project accession.
@@ -78,7 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release `v0.1.0`, before changelog tracking started in this file.
 
-[Unreleased]: https://github.com/martinghunt/ichsm/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/martinghunt/ichsm/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/martinghunt/ichsm/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/martinghunt/ichsm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/martinghunt/ichsm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/martinghunt/ichsm/compare/v0.1.0...v0.2.0
