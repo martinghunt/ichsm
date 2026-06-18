@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -67,23 +68,49 @@ type linkTreeNode struct {
 	childByID map[string]*linkTreeNode
 }
 
+type linksOptions struct {
+	outfmt string
+}
+
+type linkJSONOutput struct {
+	InputAccession string         `json:"input_accession"`
+	Links          []linkJSONNode `json:"links"`
+}
+
+type linkJSONNode struct {
+	Type      string         `json:"type"`
+	Accession string         `json:"accession"`
+	Detail    string         `json:"detail,omitempty"`
+	Children  []linkJSONNode `json:"children,omitempty"`
+}
+
+const linksFormatTree = "tree"
+
 func newLinksCommand() *cobra.Command {
+	opts := linksOptions{
+		outfmt: linksFormatTree,
+	}
 	cmd := &cobra.Command{
 		Use:   "links [accession]",
 		Short: "Show linked project, sample, assembly, experiment, run, analysis, and contig set accessions",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return executeLinks(cmd, args[0])
+			return executeLinks(cmd, args[0], opts)
 		},
 	}
 
+	cmd.Flags().StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: tree, json, table, or tsv")
 	return cmd
 }
 
-func executeLinks(cmd *cobra.Command, accession string) error {
+func executeLinks(cmd *cobra.Command, accession string, opts linksOptions) error {
 	accession = strings.TrimSpace(accession)
 	if accession == "" {
 		return fmt.Errorf("accession is required")
+	}
+	outfmt, err := parseLinksOutfmt(opts.outfmt)
+	if err != nil {
+		return err
 	}
 
 	fixedAccession, accessionType, ok := ichsm.IdentifyAccession(accession)
@@ -100,7 +127,22 @@ func executeLinks(cmd *cobra.Command, accession string) error {
 		return fmt.Errorf("no links found for accession %s", accession)
 	}
 
-	return writeLinkTree(cmd.OutOrStdout(), roots)
+	return writeLinks(cmd.OutOrStdout(), accession, roots, outfmt)
+}
+
+func parseLinksOutfmt(outfmt string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(outfmt)) {
+	case "", linksFormatTree:
+		return linksFormatTree, nil
+	case outputFormatJSON:
+		return outputFormatJSON, nil
+	case outputFormatTable:
+		return outputFormatTable, nil
+	case outputFormatTSV:
+		return outputFormatTSV, nil
+	default:
+		return "", fmt.Errorf("unsupported --outfmt %q; expected tree, json, table, or tsv", outfmt)
+	}
 }
 
 func linkTree(ctx context.Context, client *ichsm.Client, accession string, accessionType ichsm.AccessionType) ([]*linkTreeNode, error) {
@@ -711,4 +753,109 @@ func writeLinkTreeChildren(out io.Writer, nodes []*linkTreeNode, prefix string) 
 		}
 	}
 	return nil
+}
+
+func writeLinks(out io.Writer, inputAccession string, roots []*linkTreeNode, outfmt string) error {
+	switch outfmt {
+	case outputFormatJSON:
+		return writeLinkJSON(out, inputAccession, roots)
+	case outputFormatTable:
+		return writeAlignedRows(out, linkEdgeRows(inputAccession, roots))
+	case outputFormatTSV:
+		return writeDelimitedRows(out, linkEdgeRows(inputAccession, roots), "\t")
+	default:
+		return writeLinkTree(out, roots)
+	}
+}
+
+func writeLinkJSON(out io.Writer, inputAccession string, roots []*linkTreeNode) error {
+	encoded, err := json.MarshalIndent(linkJSONOutput{
+		InputAccession: inputAccession,
+		Links:          linkJSONNodes(roots),
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(out, string(encoded))
+	return nil
+}
+
+func linkJSONNodes(nodes []*linkTreeNode) []linkJSONNode {
+	out := make([]linkJSONNode, 0, len(nodes))
+	for _, node := range nodes {
+		accession, detail := linkNodeAccessionAndDetail(node)
+		out = append(out, linkJSONNode{
+			Type:      linkNodeType(node),
+			Accession: accession,
+			Detail:    detail,
+			Children:  linkJSONNodes(node.children),
+		})
+	}
+	return out
+}
+
+func linkEdgeRows(inputAccession string, roots []*linkTreeNode) [][]string {
+	rows := [][]string{{"input_accession", "parent_type", "parent_accession", "parent_detail", "child_type", "child_accession", "child_detail"}}
+	for _, root := range roots {
+		if len(root.children) == 0 {
+			rows = append(rows, linkEdgeRow(inputAccession, nil, root))
+			continue
+		}
+		rows = appendLinkChildEdges(rows, inputAccession, root)
+	}
+	return rows
+}
+
+func appendLinkChildEdges(rows [][]string, inputAccession string, parent *linkTreeNode) [][]string {
+	for _, child := range parent.children {
+		rows = append(rows, linkEdgeRow(inputAccession, parent, child))
+		rows = appendLinkChildEdges(rows, inputAccession, child)
+	}
+	return rows
+}
+
+func linkEdgeRow(inputAccession string, parent *linkTreeNode, child *linkTreeNode) []string {
+	var parentType, parentAccession, parentDetail string
+	if parent != nil {
+		parentType = linkNodeType(parent)
+		parentAccession, parentDetail = linkNodeAccessionAndDetail(parent)
+	}
+	childAccession, childDetail := linkNodeAccessionAndDetail(child)
+	return []string{
+		inputAccession,
+		formatLinkCell(parentType),
+		formatLinkCell(parentAccession),
+		formatLinkCell(parentDetail),
+		linkNodeType(child),
+		formatLinkCell(childAccession),
+		formatLinkCell(childDetail),
+	}
+}
+
+func linkNodeType(node *linkTreeNode) string {
+	switch node.label {
+	case "ContigSet":
+		return "contig_set"
+	default:
+		return strings.ToLower(node.label)
+	}
+}
+
+func linkNodeAccessionAndDetail(node *linkTreeNode) (string, string) {
+	accession := strings.TrimSpace(node.accession)
+	if node.label != "Analysis" {
+		return accession, ""
+	}
+	before, after, ok := strings.Cut(accession, " (")
+	if !ok || !strings.HasSuffix(after, ")") {
+		return accession, ""
+	}
+	return before, strings.TrimSuffix(after, ")")
+}
+
+func formatLinkCell(value string) string {
+	if value == "" {
+		return "."
+	}
+	return value
 }

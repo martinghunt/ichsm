@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Add `ichsm links <accession>` to print ENA project, sample, assembly, experiment, run, analysis, and WGS/TSA/TLS contig set relationships as a project-first tree.
+- Add `ichsm links --outfmt table|tsv|json`, with tabular output represented as parent-child edge rows and JSON output represented as the link tree.
 - Add `ichsm pubs <project_accession>` to report PubMed publications linked through ENA project xrefs and NCBI BioProject links, including immediate parent projects.
 - Add ENA analysis accession support, including `ERZ`, `DRZ`, and `SRZ` accessions.
 - Add `--outfmt ttable` and `--outfmt ttsv` for row-oriented output, equivalent to transposing the normal tabular rows before table or TSV formatting.

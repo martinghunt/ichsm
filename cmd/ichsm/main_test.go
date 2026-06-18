@@ -1076,6 +1076,57 @@ func TestRunLinksRejectsUnsupportedAccessionType(t *testing.T) {
 	}
 }
 
+func TestWriteLinksTSVWritesEdgeTable(t *testing.T) {
+	root := newLinkTreeNode("Project", "PRJNA123456")
+	sample := root.child("Sample", "SAMN02471593")
+	assembly := sample.child("Assembly", "GCA_000231155")
+	assembly.child("ContigSet", "AGQU010000000")
+	sample.child("Analysis", "ERZ26912061 (SEQUENCE_ASSEMBLY)")
+
+	var out bytes.Buffer
+	if err := writeLinks(&out, "GCA_000231155", []*linkTreeNode{root}, outputFormatTSV); err != nil {
+		t.Fatal(err)
+	}
+
+	const want = "input_accession\tparent_type\tparent_accession\tparent_detail\tchild_type\tchild_accession\tchild_detail\n" +
+		"GCA_000231155\tproject\tPRJNA123456\t.\tsample\tSAMN02471593\t.\n" +
+		"GCA_000231155\tsample\tSAMN02471593\t.\tassembly\tGCA_000231155\t.\n" +
+		"GCA_000231155\tassembly\tGCA_000231155\t.\tcontig_set\tAGQU010000000\t.\n" +
+		"GCA_000231155\tsample\tSAMN02471593\t.\tanalysis\tERZ26912061\tSEQUENCE_ASSEMBLY\n"
+	if out.String() != want {
+		t.Fatalf("stdout = %q, want %q", out.String(), want)
+	}
+}
+
+func TestWriteLinksJSONWritesTree(t *testing.T) {
+	root := newLinkTreeNode("Project", "PRJNA123456")
+	sample := root.child("Sample", "SAMN02471593")
+	sample.child("Analysis", "ERZ26912061 (SEQUENCE_ASSEMBLY)")
+
+	var out bytes.Buffer
+	if err := writeLinks(&out, "ERZ26912061", []*linkTreeNode{root}, outputFormatJSON); err != nil {
+		t.Fatal(err)
+	}
+
+	var got linkJSONOutput
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("json output did not unmarshal: %v\n%s", err, out.String())
+	}
+	if got.InputAccession != "ERZ26912061" {
+		t.Fatalf("input_accession = %q, want ERZ26912061", got.InputAccession)
+	}
+	if len(got.Links) != 1 || got.Links[0].Type != "project" || got.Links[0].Accession != "PRJNA123456" {
+		t.Fatalf("root node = %#v", got.Links)
+	}
+	if len(got.Links[0].Children) != 1 || got.Links[0].Children[0].Type != "sample" {
+		t.Fatalf("sample node = %#v", got.Links[0].Children)
+	}
+	analysis := got.Links[0].Children[0].Children[0]
+	if analysis.Type != "analysis" || analysis.Accession != "ERZ26912061" || analysis.Detail != "SEQUENCE_ASSEMBLY" {
+		t.Fatalf("analysis node = %#v", analysis)
+	}
+}
+
 func TestRunPubsWritesParentProjectPublications(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

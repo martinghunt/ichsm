@@ -115,6 +115,16 @@ Show project, sample, assembly, experiment, run, analysis, and contig set links 
 ichsm links SRR3675520
 ```
 
+Show those links as parent-child edge rows:
+```
+ichsm links SRR3675520 --outfmt tsv
+```
+
+Show those links as hierarchical JSON:
+```
+ichsm links SRR3675520 --outfmt json
+```
+
 Show PubMed publications linked to study/project `PRJEB1787`, including
 publications attached to immediate parent projects:
 ```
