@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -318,25 +317,10 @@ func summaryPlatformCounts(ctx context.Context, client *ichsm.Client, accession 
 
 func writeSummaryResults(out io.Writer, summaries []summaryResult, outfmt string) error {
 	if outfmt == outputFormatJSON {
-		encoded, err := json.MarshalIndent(summaries, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(out, string(encoded))
-		return nil
+		return writeJSONValue(out, summaries)
 	}
 
-	rows := summaryRows(summaries)
-	if outfmt == outputFormatTable {
-		return writeAlignedRows(out, rows)
-	}
-	if outfmt == outputFormatTTable {
-		return writeTransposedTable(out, rows)
-	}
-	if outfmt == outputFormatTTSV {
-		return writeTransposedDelimitedRows(out, rows, "\t")
-	}
-	return writeDelimitedRows(out, rows, "\t")
+	return writeRowsForOutputFormat(out, summaryRows(summaries), outfmt)
 }
 
 func summaryRows(summaries []summaryResult) [][]string {

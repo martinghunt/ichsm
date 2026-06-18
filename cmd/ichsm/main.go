@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -156,17 +155,11 @@ func executeSearch(cmd *cobra.Command, opts searchOptions) error {
 	if outfmt == outputFormatJSON {
 		return writeJSON(cmd.OutOrStdout(), results)
 	}
-	if outfmt == outputFormatTable {
-		return writeTable(cmd.OutOrStdout(), results, fields)
+	rows, err := searchRows(results, fields)
+	if err != nil {
+		return err
 	}
-	if outfmt == outputFormatTTable {
-		return writeTransposedSearchTable(cmd.OutOrStdout(), results, fields)
-	}
-	if outfmt == outputFormatTTSV {
-		return writeTransposedSearchTSV(cmd.OutOrStdout(), results, fields)
-	}
-
-	return writeTSV(cmd.OutOrStdout(), results, fields)
+	return writeRowsForOutputFormat(cmd.OutOrStdout(), rows, outfmt)
 }
 
 func parseOutputFormat(format string, allowJSON bool) (string, error) {
@@ -643,25 +636,10 @@ func needsJSONCountPreflight(source ichsm.SearchSource, inputType ichsm.Accessio
 
 func writeCountResults(out io.Writer, counts []countResult, outfmt string) error {
 	if outfmt == outputFormatJSON {
-		encoded, err := json.MarshalIndent(counts, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(out, string(encoded))
-		return nil
+		return writeJSONValue(out, counts)
 	}
 
-	rows := countRows(counts)
-	if outfmt == outputFormatTable {
-		return writeAlignedRows(out, rows)
-	}
-	if outfmt == outputFormatTTable {
-		return writeTransposedTable(out, rows)
-	}
-	if outfmt == outputFormatTTSV {
-		return writeTransposedDelimitedRows(out, rows, "\t")
-	}
-	return writeDelimitedRows(out, rows, "\t")
+	return writeRowsForOutputFormat(out, countRows(counts), outfmt)
 }
 
 func countRows(counts []countResult) [][]string {
@@ -682,12 +660,7 @@ func writeJSON(out io.Writer, results []ichsm.SearchResult) error {
 		byAccession[result.InputAccession] = result.Records
 	}
 
-	encoded, err := json.MarshalIndent(byAccession, "", "  ")
-	if err != nil {
-		return err
-	}
-	fmt.Fprintln(out, string(encoded))
-	return nil
+	return writeJSONValue(out, byAccession)
 }
 
 func writeTSV(out io.Writer, results []ichsm.SearchResult, requestedFields []string) error {
@@ -695,31 +668,7 @@ func writeTSV(out io.Writer, results []ichsm.SearchResult, requestedFields []str
 	if err != nil {
 		return err
 	}
-	return writeDelimitedRows(out, rows, "\t")
-}
-
-func writeTable(out io.Writer, results []ichsm.SearchResult, requestedFields []string) error {
-	rows, err := searchRows(results, requestedFields)
-	if err != nil {
-		return err
-	}
-	return writeAlignedRows(out, rows)
-}
-
-func writeTransposedSearchTable(out io.Writer, results []ichsm.SearchResult, requestedFields []string) error {
-	rows, err := searchRows(results, requestedFields)
-	if err != nil {
-		return err
-	}
-	return writeTransposedTable(out, rows)
-}
-
-func writeTransposedSearchTSV(out io.Writer, results []ichsm.SearchResult, requestedFields []string) error {
-	rows, err := searchRows(results, requestedFields)
-	if err != nil {
-		return err
-	}
-	return writeTransposedDelimitedRows(out, rows, "\t")
+	return writeRowsForOutputFormat(out, rows, outputFormatTSV)
 }
 
 func searchRows(results []ichsm.SearchResult, requestedFields []string) ([][]string, error) {

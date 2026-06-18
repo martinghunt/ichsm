@@ -131,11 +131,11 @@ func writeReads(out io.Writer, files []ichsm.ReadFile, format string) error {
 	case readsFormatManifest:
 		return writeReadsManifest(out, files)
 	case readsFormatTable:
-		return writeAlignedRows(out, readFilesRows(files))
+		return writeRowsForOutputFormat(out, readFilesRows(files), outputFormatTable)
 	case outputFormatTTable:
-		return writeTransposedTable(out, readFilesRows(files))
+		return writeRowsForOutputFormat(out, readFilesRows(files), outputFormatTTable)
 	case outputFormatTTSV:
-		return writeTransposedDelimitedRows(out, readFilesRows(files), "\t")
+		return writeRowsForOutputFormat(out, readFilesRows(files), outputFormatTTSV)
 	case readsFormatURLs:
 		for _, file := range files {
 			fmt.Fprintln(out, file.URL)

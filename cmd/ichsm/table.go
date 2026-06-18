@@ -1,10 +1,35 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 )
+
+func writeJSONValue(out io.Writer, value any) error {
+	encoded, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out, string(encoded))
+	return err
+}
+
+func writeRowsForOutputFormat(out io.Writer, rows [][]string, outfmt string) error {
+	switch outfmt {
+	case outputFormatTable:
+		return writeAlignedRows(out, rows)
+	case outputFormatTTable:
+		return writeTransposedTable(out, rows)
+	case outputFormatTTSV:
+		return writeTransposedDelimitedRows(out, rows, "\t")
+	case outputFormatTSV:
+		return writeDelimitedRows(out, rows, "\t")
+	default:
+		return fmt.Errorf("unsupported tabular output format %q", outfmt)
+	}
+}
 
 func writeAlignedRows(out io.Writer, rows [][]string) error {
 	if len(rows) == 0 {

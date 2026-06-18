@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -66,25 +65,10 @@ func executePubs(cmd *cobra.Command, accession string, opts pubsOptions) error {
 
 func writePublications(out io.Writer, publications []ichsm.Publication, outfmt string) error {
 	if outfmt == outputFormatJSON {
-		encoded, err := json.MarshalIndent(publications, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(out, string(encoded))
-		return nil
+		return writeJSONValue(out, publications)
 	}
 
-	rows := publicationRows(publications)
-	if outfmt == outputFormatTable {
-		return writeAlignedRows(out, rows)
-	}
-	if outfmt == outputFormatTTable {
-		return writeTransposedTable(out, rows)
-	}
-	if outfmt == outputFormatTTSV {
-		return writeTransposedDelimitedRows(out, rows, "\t")
-	}
-	return writeDelimitedRows(out, rows, "\t")
+	return writeRowsForOutputFormat(out, publicationRows(publications), outfmt)
 }
 
 func publicationRows(publications []ichsm.Publication) [][]string {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 
@@ -119,25 +118,10 @@ func identifyAccessions(accessions []string) ([]identifyResult, int) {
 
 func writeIdentifyResults(out io.Writer, results []identifyResult, outfmt string) error {
 	if outfmt == outputFormatJSON {
-		encoded, err := json.MarshalIndent(results, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(out, string(encoded))
-		return nil
+		return writeJSONValue(out, results)
 	}
 
-	rows := identifyRows(results)
-	if outfmt == outputFormatTable {
-		return writeAlignedRows(out, rows)
-	}
-	if outfmt == outputFormatTTable {
-		return writeTransposedTable(out, rows)
-	}
-	if outfmt == outputFormatTTSV {
-		return writeTransposedDelimitedRows(out, rows, "\t")
-	}
-	return writeDelimitedRows(out, rows, "\t")
+	return writeRowsForOutputFormat(out, identifyRows(results), outfmt)
 }
 
 func identifyRows(results []identifyResult) [][]string {
