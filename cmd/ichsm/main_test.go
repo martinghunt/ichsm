@@ -359,6 +359,14 @@ func TestRunLinksWritesRunTree(t *testing.T) {
 				t.Fatalf("fields = %q", got)
 			}
 			_, _ = w.Write([]byte(`[{"run_accession":"DRR510832","experiment_accession":"DRX494734","sample_accession":"SAMD00654312","study_accession":"PRJDB16917"}]`))
+		case "analysis":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAnalysisFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"analysis_accession":"ERZ26912061","analysis_type":"SEQUENCE_ASSEMBLY","sample_accession":"SAMD00654312","study_accession":"PRJEB90490"}]`))
 		case "wgs_set":
 			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
 				t.Fatalf("query = %q", got)
@@ -395,6 +403,7 @@ func TestRunLinksWritesRunTree(t *testing.T) {
 
 	const want = "Project: PRJEB90490\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u2514\u2500\u2500 Analysis: ERZ26912061 (SEQUENCE_ASSEMBLY)\n" +
 		"Project: PRJDB16917\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
 		"    \u251c\u2500\u2500 Experiment: DRX494734\n" +
@@ -431,6 +440,14 @@ func TestRunLinksWritesSampleTree(t *testing.T) {
 				t.Fatalf("fields = %q", got)
 			}
 			_, _ = w.Write([]byte(`[{"run_accession":"SRR3675520","experiment_accession":"SRX1850792","sample_accession":"SAMN05276490","study_accession":"PRJNA302362"}]`))
+		case "analysis":
+			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAnalysisFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
 		case "wgs_set":
 			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
 				t.Fatalf("query = %q", got)
@@ -499,6 +516,14 @@ func TestRunLinksWritesExperimentTreeWithContigSet(t *testing.T) {
 				t.Fatalf("fields = %q", got)
 			}
 			_, _ = w.Write([]byte(`[{"run_accession":"DRR510832","experiment_accession":"DRX494734","sample_accession":"SAMD00654312","study_accession":"PRJDB16917"}]`))
+		case "analysis":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAnalysisFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"analysis_accession":"ERZ26912061","analysis_type":"SEQUENCE_ASSEMBLY","sample_accession":"SAMD00654312","study_accession":"PRJEB90490"}]`))
 		case "wgs_set":
 			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
 				t.Fatalf("query = %q", got)
@@ -535,6 +560,7 @@ func TestRunLinksWritesExperimentTreeWithContigSet(t *testing.T) {
 
 	const want = "Project: PRJEB90490\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u2514\u2500\u2500 Analysis: ERZ26912061 (SEQUENCE_ASSEMBLY)\n" +
 		"Project: PRJDB16917\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
 		"    \u251c\u2500\u2500 Experiment: DRX494734\n" +
@@ -583,6 +609,14 @@ func TestRunLinksWritesProjectTree(t *testing.T) {
 				t.Fatalf("fields = %q", got)
 			}
 			_, _ = w.Write([]byte(`[{"accession":"WGS1","sample_accession":"SAMN1","study_accession":"PRJNA302362"}]`))
+		case "analysis":
+			if got := query.Get("query"); got != "study_accession=PRJNA302362" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAnalysisFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
 		case "tsa_set", "tls_set":
 			if got := query.Get("query"); got != "study_accession=PRJNA302362" {
 				t.Fatalf("query = %q", got)
@@ -671,6 +705,14 @@ func TestRunLinksWritesContigSetTree(t *testing.T) {
 				t.Fatalf("fields = %q", got)
 			}
 			_, _ = w.Write([]byte(`[{"run_accession":"DRR510832","experiment_accession":"DRX494734","sample_accession":"SAMD00654312","study_accession":"PRJDB16917"}]`))
+		case "analysis":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAnalysisFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"analysis_accession":"ERZ26912061","analysis_type":"SEQUENCE_ASSEMBLY","sample_accession":"SAMD00654312","study_accession":"PRJEB90490"}]`))
 		default:
 			t.Fatalf("result = %q", query.Get("result"))
 		}
@@ -688,6 +730,90 @@ func TestRunLinksWritesContigSetTree(t *testing.T) {
 
 	const want = "Project: PRJEB90490\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u2514\u2500\u2500 Analysis: ERZ26912061 (SEQUENCE_ASSEMBLY)\n" +
+		"Project: PRJDB16917\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u251c\u2500\u2500 Experiment: DRX494734\n" +
+		"    \u2502   \u2514\u2500\u2500 Run: DRR510832\n" +
+		"    \u2514\u2500\u2500 ContigSet: BAAHUD010000000\n" +
+		"Project: PRJNA514245\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u2514\u2500\u2500 ContigSet: DBIITB010000000\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestRunLinksWritesAnalysisTree(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		switch query.Get("result") {
+		case "analysis":
+			switch got := query.Get("query"); got {
+			case "analysis_accession=ERZ26912061", "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312":
+			default:
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkAnalysisFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"analysis_accession":"ERZ26912061","analysis_type":"SEQUENCE_ASSEMBLY","sample_accession":"SAMD00654312","study_accession":"PRJEB90490"}]`))
+		case "sample":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkSampleFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMD00654312","secondary_sample_accession":"SRS24913212","study_accession":"PRJEB90490;PRJDB16917"}]`))
+		case "read_run":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkRunFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"run_accession":"DRR510832","experiment_accession":"DRX494734","sample_accession":"SAMD00654312","study_accession":"PRJDB16917"}]`))
+		case "wgs_set":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkWGSSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[` +
+				`{"accession":"BAAHUD010000000","sample_accession":"SAMD00654312","study_accession":"PRJDB16917","run_accession":"DRR510832"},` +
+				`{"accession":"DBIITB010000000","sample_accession":"SAMD00654312","study_accession":"PRJNA514245","run_accession":"DRR510832"}` +
+				`]`))
+		case "tsa_set", "tls_set":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkContigSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Fatalf("result = %q", query.Get("result"))
+		}
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"links", "ERZ26912061"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "Project: PRJEB90490\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u2514\u2500\u2500 Analysis: ERZ26912061 (SEQUENCE_ASSEMBLY)\n" +
 		"Project: PRJDB16917\n" +
 		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
 		"    \u251c\u2500\u2500 Experiment: DRX494734\n" +
@@ -809,7 +935,7 @@ func TestRunSearchCountRejectsNCBISource(t *testing.T) {
 
 func TestRunIdentifyWritesTSV(t *testing.T) {
 	code, stdout := captureStdout(t, func() int {
-		return run([]string{"identify", "SAMN05276490", "GCF_000001405.40", "--outfmt", "tsv"})
+		return run([]string{"identify", "SAMN05276490", "GCF_000001405.40", "ERZ26912061", "--outfmt", "tsv"})
 	})
 
 	if code != 0 {
@@ -818,7 +944,8 @@ func TestRunIdentifyWritesTSV(t *testing.T) {
 
 	const want = "input_accession\tnormalized_accession\ttype\tdescription\tena_search\tncbi_search\n" +
 		"SAMN05276490\tSAMN05276490\tsample\tSample accession\tyes\tno\n" +
-		"GCF_000001405.40\tGCF_000001405\tassembly\tGenome assembly accession\tyes\tyes\n"
+		"GCF_000001405.40\tGCF_000001405\tassembly\tGenome assembly accession\tyes\tyes\n" +
+		"ERZ26912061\tERZ26912061\tanalysis\tAnalysis accession\tyes\tno\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
@@ -1212,11 +1339,11 @@ func TestRunGetFieldsListsDataTypes(t *testing.T) {
 	}
 
 	const want = "resultId\tdescription\tprimaryAccessionType\tichsm_search\n" +
+		"analysis\tAnalyses\tanalysis_accession\tyes\n" +
 		"read_run\tRaw reads\trun_accession\tyes\n" +
 		"sample\tSamples\tsample_accession\tyes\n" +
 		"tls_set\tTargeted locus study contig sets\taccession\tyes\n" +
-		"wgs_set\tGenome assembly contig set (WGS)\taccession\tyes\n" +
-		"analysis\tAnalyses\tanalysis_accession\tno\n"
+		"wgs_set\tGenome assembly contig set (WGS)\taccession\tyes\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
@@ -1300,8 +1427,8 @@ func TestRunGetFieldsWritesTable(t *testing.T) {
 	}
 
 	const want = "resultId  description  ichsm_search\n" +
-		"sample    Samples      yes\n" +
-		"analysis  Analyses     no\n"
+		"analysis  Analyses     yes\n" +
+		"sample    Samples      yes\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}

@@ -42,6 +42,9 @@ func TestIdentifyAccession(t *testing.T) {
 		{"ERR123456", "ERR123456", AccessionTypeRun, true},
 		{"ERR12345", "", "", false},
 		{"ERX123456", "ERX123456", AccessionTypeExperiment, true},
+		{"ERZ26912061", "ERZ26912061", AccessionTypeAnalysis, true},
+		{"DRZ123456", "DRZ123456", AccessionTypeAnalysis, true},
+		{"SRZ123456", "SRZ123456", AccessionTypeAnalysis, true},
 	}
 
 	for _, tt := range tests {

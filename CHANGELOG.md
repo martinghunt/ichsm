@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Add `ichsm links <accession>` to print ENA project, sample, experiment, run, and WGS/TSA/TLS contig set relationships as a project-first tree.
+- Add `ichsm links <accession>` to print ENA project, sample, experiment, run, analysis, and WGS/TSA/TLS contig set relationships as a project-first tree.
+- Add ENA analysis accession support, including `ERZ`, `DRZ`, and `SRZ` accessions.
 
 ### Changed
 - Avoid redundant ENA study-resolution requests when `links` or count/search queries already have a primary `PRJ...` project accession.

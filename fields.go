@@ -38,6 +38,8 @@ func accessionTypeForResult(resultType string) (AccessionType, bool) {
 		return AccessionTypeSample, true
 	case "read_run":
 		return AccessionTypeRun, true
+	case "analysis":
+		return AccessionTypeAnalysis, true
 	default:
 		return "", false
 	}

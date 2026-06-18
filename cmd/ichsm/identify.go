@@ -180,6 +180,8 @@ func accessionTypeDescription(accessionType ichsm.AccessionType) string {
 		return "Read run accession"
 	case ichsm.AccessionTypeExperiment:
 		return "Read experiment accession"
+	case ichsm.AccessionTypeAnalysis:
+		return "Analysis accession"
 	default:
 		return "Unrecognized accession format"
 	}

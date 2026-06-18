@@ -133,32 +133,41 @@ func SearchKeyValue(queryType AccessionType, resultType AccessionType, accession
 			return "", "", unsupportedSearchLevel(queryType, resultType)
 		}
 		return "query", "accession=" + accession, nil
+	case AccessionTypeAnalysis:
+		if resultType != AccessionTypeAnalysis {
+			return "", "", unsupportedSearchLevel(queryType, resultType)
+		}
+		return "query", "analysis_accession=" + accession, nil
 	case AccessionTypeStudy:
 		switch resultType {
 		case AccessionTypeStudy:
 			return "query", "study_accession=" + accession + " OR secondary_study_accession=" + accession, nil
-		case AccessionTypeSample, AccessionTypeRun, AccessionTypeAssembly, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet:
+		case AccessionTypeSample, AccessionTypeRun, AccessionTypeAssembly, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet, AccessionTypeAnalysis:
 			return "query", "study_accession=" + accession, nil
 		default:
 			return "", "", unsupportedSearchLevel(queryType, resultType)
 		}
 	case AccessionTypeSample:
 		switch resultType {
-		case AccessionTypeSample, AccessionTypeRun, AccessionTypeAssembly, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet:
+		case AccessionTypeSample, AccessionTypeRun, AccessionTypeAssembly, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet, AccessionTypeAnalysis:
 			return "query", "sample_accession=" + accession + " OR secondary_sample_accession=" + accession, nil
 		default:
 			return "", "", unsupportedSearchLevel(queryType, resultType)
 		}
 	case AccessionTypeRun:
-		if resultType != AccessionTypeRun && resultType != AccessionTypeAssembly && resultType != AccessionTypeWGSSet {
+		if resultType != AccessionTypeRun && resultType != AccessionTypeAssembly && resultType != AccessionTypeWGSSet && resultType != AccessionTypeAnalysis {
 			return "", "", unsupportedSearchLevel(queryType, resultType)
 		}
 		return "query", "run_accession=" + accession, nil
 	case AccessionTypeExperiment:
-		if resultType != AccessionTypeRun {
+		switch resultType {
+		case AccessionTypeRun:
+			return "query", "experiment_accession=" + accession, nil
+		case AccessionTypeAnalysis:
+			return "query", "experiment_accession=" + accession, nil
+		default:
 			return "", "", unsupportedSearchLevel(queryType, resultType)
 		}
-		return "query", "experiment_accession=" + accession, nil
 	default:
 		return "", "", fmt.Errorf("unsupported accession type %q", queryType)
 	}
@@ -453,9 +462,9 @@ func ResolveSearchLevel(inputType AccessionType, level AccessionType) (Accession
 	}
 
 	switch level {
-	case AccessionTypeAssembly, AccessionTypeContigSet, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet, AccessionTypeSequence, AccessionTypeCoding, AccessionTypeStudy, AccessionTypeSample, AccessionTypeRun:
+	case AccessionTypeAssembly, AccessionTypeContigSet, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet, AccessionTypeSequence, AccessionTypeCoding, AccessionTypeStudy, AccessionTypeSample, AccessionTypeRun, AccessionTypeAnalysis:
 	default:
-		return "", fmt.Errorf("unsupported search level %q; expected study, sample, run, assembly, sequence, coding, contig_set, wgs_set, tsa_set, or tls_set", level)
+		return "", fmt.Errorf("unsupported search level %q; expected study, sample, run, assembly, sequence, coding, analysis, contig_set, wgs_set, tsa_set, or tls_set", level)
 	}
 
 	if inputType == AccessionTypeContigSet {
@@ -496,7 +505,7 @@ func addSourceToRecords(records []Record, source SearchSource) {
 
 func supportsENA(accessionType AccessionType) bool {
 	switch accessionType {
-	case AccessionTypeAssembly, AccessionTypeContigSet, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet, AccessionTypeSequence, AccessionTypeCoding, AccessionTypeStudy, AccessionTypeSample, AccessionTypeRun, AccessionTypeExperiment:
+	case AccessionTypeAssembly, AccessionTypeContigSet, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet, AccessionTypeSequence, AccessionTypeCoding, AccessionTypeStudy, AccessionTypeSample, AccessionTypeRun, AccessionTypeExperiment, AccessionTypeAnalysis:
 		return true
 	default:
 		return false

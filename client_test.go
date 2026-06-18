@@ -391,6 +391,38 @@ func TestQueryCoding(t *testing.T) {
 	}
 }
 
+func TestQueryAnalysis(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "analysis" {
+			t.Fatalf("result = %q, want analysis", got)
+		}
+		if got := query.Get("query"); got != "analysis_accession=ERZ26912061" {
+			t.Fatalf("query = %q", got)
+		}
+		if got := query.Get("fields"); got != "study_accession,sample_accession,analysis_accession,analysis_type,analysis_title,analysis_description" {
+			t.Fatalf("fields = %q", got)
+		}
+		_, _ = w.Write([]byte(`[{"analysis_accession":"ERZ26912061","analysis_type":"SEQUENCE_ASSEMBLY","sample_accession":"SAMD00654312","study_accession":"PRJEB90490"}]`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	resultType, fields, records, err := client.Query(context.Background(), "ERZ26912061", AccessionTypeAnalysis, []string{"DEFAULT"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultType != AccessionTypeAnalysis {
+		t.Fatalf("resultType = %q, want %q", resultType, AccessionTypeAnalysis)
+	}
+	if !reflect.DeepEqual(fields, analysisDefault) {
+		t.Fatalf("fields = %#v, want %#v", fields, analysisDefault)
+	}
+	if len(records) != 1 || records[0]["analysis_type"] != "SEQUENCE_ASSEMBLY" {
+		t.Fatalf("records = %#v", records)
+	}
+}
+
 func TestQueryContigSetFallsBackToTSASet(t *testing.T) {
 	var sawWGS bool
 	var sawTSA bool
@@ -631,6 +663,27 @@ func TestSearchKeyValueSupportsContigSetLinks(t *testing.T) {
 			accession:  "DRR510832",
 			wantValue:  "run_accession=DRR510832",
 		},
+		{
+			name:       "analysis accession",
+			queryType:  AccessionTypeAnalysis,
+			resultType: AccessionTypeAnalysis,
+			accession:  "ERZ26912061",
+			wantValue:  "analysis_accession=ERZ26912061",
+		},
+		{
+			name:       "sample to analysis",
+			queryType:  AccessionTypeSample,
+			resultType: AccessionTypeAnalysis,
+			accession:  "SAMD00654312",
+			wantValue:  "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312",
+		},
+		{
+			name:       "study to analysis",
+			queryType:  AccessionTypeStudy,
+			resultType: AccessionTypeAnalysis,
+			accession:  "PRJEB90490",
+			wantValue:  "study_accession=PRJEB90490",
+		},
 	}
 
 	for _, tt := range tests {
@@ -675,7 +728,8 @@ func TestFieldPresetLevelForResult(t *testing.T) {
 		{resultType: "read_run", field: "fastq_ftp", wantLevel: FieldPresetDefault, wantOK: true},
 		{resultType: "read_run", field: "center_name", wantLevel: FieldPresetBig, wantOK: true},
 		{resultType: "read_run", field: "age", wantLevel: FieldPresetAll, wantOK: true},
-		{resultType: "analysis", field: "analysis_accession"},
+		{resultType: "analysis", field: "analysis_accession", wantLevel: FieldPresetSmall, wantOK: true},
+		{resultType: "analysis", field: "analysis_title", wantLevel: FieldPresetDefault, wantOK: true},
 	}
 
 	for _, tt := range tests {

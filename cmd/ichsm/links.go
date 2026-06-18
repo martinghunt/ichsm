@@ -39,6 +39,15 @@ var linkContigSetFields = []string{
 
 var linkWGSSetFields = append(append([]string(nil), linkContigSetFields...), "run_accession")
 
+var linkAnalysisFields = []string{
+	"analysis_accession",
+	"analysis_type",
+	"sample_accession",
+	"secondary_sample_accession",
+	"study_accession",
+	"secondary_study_accession",
+}
+
 type linkEntry struct {
 	label     string
 	accession string
@@ -54,7 +63,7 @@ type linkTreeNode struct {
 func newLinksCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "links [accession]",
-		Short: "Show linked project, sample, experiment, run, and contig set accessions",
+		Short: "Show linked project, sample, experiment, run, analysis, and contig set accessions",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeLinks(cmd, args[0])
@@ -114,6 +123,13 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 			for _, record := range contigSetRecords {
 				builder.addContigSetRecordPath(record)
 			}
+			analysisRecords, err := queryLinkAnalysisRecords(ctx, client, accession, accessionType)
+			if err != nil {
+				return nil, err
+			}
+			for _, record := range analysisRecords {
+				builder.addAnalysisRecordPath(record, "")
+			}
 		}
 	case ichsm.AccessionTypeSample:
 		if err := addSampleNeighborhood(ctx, client, builder, accession); err != nil {
@@ -135,6 +151,14 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 		}
 		for _, record := range runRecords {
 			builder.addRunRecordPath(record, accessionType, searchAccession)
+		}
+
+		analysisRecords, err := queryLinkAnalysisRecords(ctx, client, searchAccession, accessionType)
+		if err != nil {
+			return nil, err
+		}
+		for _, record := range analysisRecords {
+			builder.addAnalysisRecordPath(record, "")
 		}
 
 		contigSetRecords, err := queryLinkContigSetRecords(ctx, client, searchAccession, accessionType)
@@ -162,8 +186,24 @@ func linkTree(ctx context.Context, client *ichsm.Client, accession string, acces
 		for _, record := range contigSetRecords {
 			builder.addContigSetRecordPath(record)
 		}
+	case ichsm.AccessionTypeAnalysis:
+		analysisRecords, err := queryLinkAnalysisRecords(ctx, client, accession, accessionType)
+		if err != nil {
+			return nil, err
+		}
+		sampleAccessions := recordSampleAccessions(analysisRecords)
+		if len(sampleAccessions) > 0 {
+			for _, sampleAccession := range sampleAccessions {
+				if err := addSampleNeighborhood(ctx, client, builder, sampleAccession); err != nil {
+					return nil, err
+				}
+			}
+		}
+		for _, record := range analysisRecords {
+			builder.addAnalysisRecordPath(record, accession)
+		}
 	default:
-		return nil, fmt.Errorf("links supports run, experiment, sample, study/project, and contig set accessions")
+		return nil, fmt.Errorf("links supports run, experiment, sample, study/project, analysis, and contig set accessions")
 	}
 
 	return builder.roots, nil
@@ -206,6 +246,14 @@ func queryLinkContigSetRecords(ctx context.Context, client *ichsm.Client, access
 	return records, nil
 }
 
+func queryLinkAnalysisRecords(ctx context.Context, client *ichsm.Client, accession string, accessionType ichsm.AccessionType) ([]ichsm.Record, error) {
+	_, _, records, err := client.Query(ctx, accession, accessionType, linkAnalysisFields, ichsm.AccessionTypeAnalysis)
+	if err != nil {
+		return nil, fmt.Errorf("error getting analysis links for accession %s: %w", accession, err)
+	}
+	return records, nil
+}
+
 func addSampleNeighborhood(ctx context.Context, client *ichsm.Client, builder *linkTreeBuilder, accession string) error {
 	sampleRecords, err := queryLinkSampleRecords(ctx, client, accession)
 	if err != nil {
@@ -221,6 +269,14 @@ func addSampleNeighborhood(ctx context.Context, client *ichsm.Client, builder *l
 	}
 	for _, record := range runRecords {
 		builder.addRunRecordPath(record, ichsm.AccessionTypeSample, accession)
+	}
+
+	analysisRecords, err := queryLinkAnalysisRecords(ctx, client, accession, ichsm.AccessionTypeSample)
+	if err != nil {
+		return err
+	}
+	for _, record := range analysisRecords {
+		builder.addAnalysisRecordPath(record, "")
 	}
 
 	contigSetRecords, err := queryLinkContigSetRecords(ctx, client, accession, ichsm.AccessionTypeSample)
@@ -277,12 +333,14 @@ func recordSampleAccessions(records []ichsm.Record) []string {
 	seen := map[string]bool{}
 	var accessions []string
 	for _, record := range records {
-		for _, accession := range recordLinkValues(record, "sample_accession") {
-			if seen[accession] {
-				continue
+		for _, key := range []string{"sample_accession", "secondary_sample_accession"} {
+			for _, accession := range recordLinkValues(record, key) {
+				if seen[accession] {
+					continue
+				}
+				accessions = append(accessions, accession)
+				seen[accession] = true
 			}
-			accessions = append(accessions, accession)
-			seen[accession] = true
 		}
 	}
 	return accessions
@@ -339,7 +397,7 @@ func (b *linkTreeBuilder) addStudyRecordPath(record ichsm.Record, fixedAccession
 		projects = []string{fixedAccession}
 	}
 	for _, project := range projects {
-		b.addPath(project, "", "", "", "")
+		b.addPath(project, "", "", "", "", "")
 	}
 }
 
@@ -350,7 +408,7 @@ func (b *linkTreeBuilder) addSampleRecordPath(record ichsm.Record, fixedAccessio
 		projects = []string{""}
 	}
 	for _, project := range projects {
-		b.addPath(project, sample, "", "", "")
+		b.addPath(project, sample, "", "", "", "")
 	}
 }
 
@@ -376,7 +434,7 @@ func (b *linkTreeBuilder) addRunRecordPath(record ichsm.Record, accessionType ic
 	}
 
 	for _, project := range projects {
-		b.addPath(project, sample, experiment, run, "")
+		b.addPath(project, sample, experiment, run, "", "")
 	}
 }
 
@@ -388,16 +446,37 @@ func (b *linkTreeBuilder) addContigSetRecordPath(record ichsm.Record) {
 	sample := recordLinkString(record, "sample_accession", "secondary_sample_accession")
 	contigSet := recordLinkString(record, "accession")
 	for _, project := range projects {
-		b.addPath(project, sample, "", "", contigSet)
+		b.addPath(project, sample, "", "", "", contigSet)
 	}
 }
 
-func (b *linkTreeBuilder) addPath(project string, sample string, experiment string, run string, contigSet string) {
+func (b *linkTreeBuilder) addAnalysisRecordPath(record ichsm.Record, fixedAccession string) {
+	projects := recordLinkValues(record, "study_accession")
+	if len(projects) == 0 {
+		projects = recordLinkValues(record, "secondary_study_accession")
+	}
+	if len(projects) == 0 {
+		projects = []string{""}
+	}
+	sample := recordLinkString(record, "sample_accession", "secondary_sample_accession")
+	analysis := firstNonEmpty(recordLinkString(record, "analysis_accession"), fixedAccession)
+	analysisType := recordLinkString(record, "analysis_type")
+	if analysis != "" && analysisType != "" {
+		analysis = analysis + " (" + analysisType + ")"
+	}
+
+	for _, project := range projects {
+		b.addPath(project, sample, "", "", analysis, "")
+	}
+}
+
+func (b *linkTreeBuilder) addPath(project string, sample string, experiment string, run string, analysis string, contigSet string) {
 	entries := compactLinkEntries([]linkEntry{
 		{label: "Project", accession: project},
 		{label: "Sample", accession: sample},
 		{label: "Experiment", accession: experiment},
 		{label: "Run", accession: run},
+		{label: "Analysis", accession: analysis},
 		{label: "ContigSet", accession: contigSet},
 	})
 	if len(entries) == 0 {

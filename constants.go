@@ -18,6 +18,7 @@ var urlSearchData = map[AccessionType]searchEndpoint{
 	AccessionTypeSample:     {mainType: "search", result: "sample"},
 	AccessionTypeRun:        {mainType: "search", result: "read_run"},
 	AccessionTypeExperiment: {mainType: "search", result: "read_run"},
+	AccessionTypeAnalysis:   {mainType: "search", result: "analysis"},
 }
 
 var assemblySmall = []string{"accession", "sample_accession", "run_accession", "version"}
@@ -118,6 +119,32 @@ var runBig = append(copyStrings(runDefault),
 	"scientific_name",
 )
 
+var analysisSmall = []string{
+	"study_accession",
+	"sample_accession",
+	"analysis_accession",
+	"analysis_type",
+}
+var analysisDefault = append(copyStrings(analysisSmall),
+	"analysis_title",
+	"analysis_description",
+)
+var analysisBig = append(copyStrings(analysisDefault),
+	"secondary_study_accession",
+	"secondary_sample_accession",
+	"experiment_accession",
+	"run_accession",
+	"assembly_software",
+	"pipeline_name",
+	"pipeline_version",
+	"center_name",
+	"broker_name",
+	"first_public",
+	"last_updated",
+	"scientific_name",
+	"tax_id",
+)
+
 var fieldPresets = map[AccessionType]map[string][]string{
 	AccessionTypeAssembly: {
 		"SMALL":   assemblySmall,
@@ -173,6 +200,11 @@ var fieldPresets = map[AccessionType]map[string][]string{
 		"SMALL":   runSmall,
 		"DEFAULT": runDefault,
 		"BIG":     runBig,
+	},
+	AccessionTypeAnalysis: {
+		"SMALL":   analysisSmall,
+		"DEFAULT": analysisDefault,
+		"BIG":     analysisBig,
 	},
 }
 

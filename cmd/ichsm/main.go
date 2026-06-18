@@ -195,6 +195,8 @@ func parseSearchLevel(level string) (ichsm.AccessionType, error) {
 		return ichsm.AccessionTypeSequence, nil
 	case string(ichsm.AccessionTypeCoding):
 		return ichsm.AccessionTypeCoding, nil
+	case string(ichsm.AccessionTypeAnalysis):
+		return ichsm.AccessionTypeAnalysis, nil
 	case string(ichsm.AccessionTypeContigSet):
 		return ichsm.AccessionTypeContigSet, nil
 	case string(ichsm.AccessionTypeWGSSet):
@@ -204,7 +206,7 @@ func parseSearchLevel(level string) (ichsm.AccessionType, error) {
 	case string(ichsm.AccessionTypeTLSSet):
 		return ichsm.AccessionTypeTLSSet, nil
 	default:
-		return "", fmt.Errorf("unsupported --level %q; expected study, sample, run, assembly, sequence, coding, contig_set, wgs_set, tsa_set, or tls_set", level)
+		return "", fmt.Errorf("unsupported --level %q; expected study, sample, run, assembly, sequence, coding, analysis, contig_set, wgs_set, tsa_set, or tls_set", level)
 	}
 }
 
@@ -444,7 +446,7 @@ func ichsmColumnPresetRank(level string) int {
 
 func ichsmSearchSupportsResult(resultType string) bool {
 	switch resultType {
-	case "assembly", "coding", "read_run", "sample", "sequence", "study", "tls_set", "tsa_set", "wgs_set":
+	case "analysis", "assembly", "coding", "read_run", "sample", "sequence", "study", "tls_set", "tsa_set", "wgs_set":
 		return true
 	default:
 		return false

@@ -20,6 +20,7 @@ const (
 	AccessionTypeSample     AccessionType = "sample"
 	AccessionTypeRun        AccessionType = "run"
 	AccessionTypeExperiment AccessionType = "experiment"
+	AccessionTypeAnalysis   AccessionType = "analysis"
 )
 
 type accessionRegex struct {
@@ -40,6 +41,7 @@ var accessionRegexes = []accessionRegex{
 	{re: regexp.MustCompile(`^((?:E|D|S)RS[0-9]{6,})$`), typ: AccessionTypeSample, normalize: firstAccessionMatch},
 	{re: regexp.MustCompile(`^((?:E|D|S)RR[0-9]{6,})$`), typ: AccessionTypeRun, normalize: firstAccessionMatch},
 	{re: regexp.MustCompile(`^((?:E|D|S)RX[0-9]{6,})$`), typ: AccessionTypeExperiment, normalize: firstAccessionMatch},
+	{re: regexp.MustCompile(`^((?:E|D|S)RZ[0-9]{6,})$`), typ: AccessionTypeAnalysis, normalize: firstAccessionMatch},
 	{re: regexp.MustCompile(`^((?:WP|NP|XP|YP|AP|ZP)_[0-9]+)(\.[0-9]+)*$`), typ: AccessionTypeCoding, normalize: firstAccessionMatch},
 	{re: regexp.MustCompile(`^((?:NC|NG|NM|NR|NT|NW|NZ|XM|XR|AC|CM|CP)_[0-9]+)(\.[0-9]+)*$`), typ: AccessionTypeSequence, normalize: firstAccessionMatch},
 	{re: regexp.MustCompile(`^([A-Z]{3}(?:[0-9]{5}|[0-9]{7}))(\.[0-9]+)*$`), typ: AccessionTypeCoding, normalize: firstAccessionMatch},
