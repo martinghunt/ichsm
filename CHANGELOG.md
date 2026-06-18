@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add `ichsm links <accession>` to print ENA project, sample, experiment, run, and WGS/TSA/TLS contig set relationships as a project-first tree.
+
 ## [0.4.0] - 2026-06-17
 
 ### Added

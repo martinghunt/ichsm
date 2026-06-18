@@ -322,6 +322,388 @@ func TestRunSearchWritesJSON(t *testing.T) {
 	}
 }
 
+func TestRunLinksWritesRunTree(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		switch query.Get("result") {
+		case "sample":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkSampleFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMD00654312","secondary_sample_accession":"SRS24913212","study_accession":"PRJEB90490;PRJDB16917"}]`))
+		case "read_run":
+			switch got := query.Get("query"); got {
+			case "run_accession=DRR510832", "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312":
+			default:
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkRunFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"run_accession":"DRR510832","experiment_accession":"DRX494734","sample_accession":"SAMD00654312","study_accession":"PRJDB16917"}]`))
+		case "wgs_set":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkWGSSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[` +
+				`{"accession":"BAAHUD010000000","sample_accession":"SAMD00654312","study_accession":"PRJDB16917","run_accession":"DRR510832"},` +
+				`{"accession":"DBIITB010000000","sample_accession":"SAMD00654312","study_accession":"PRJNA514245","run_accession":"DRR510832"}` +
+				`]`))
+		case "tsa_set", "tls_set":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkContigSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Fatalf("result = %q", query.Get("result"))
+		}
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"links", "DRR510832"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "Project: PRJEB90490\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"Project: PRJDB16917\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u251c\u2500\u2500 Experiment: DRX494734\n" +
+		"    \u2502   \u2514\u2500\u2500 Run: DRR510832\n" +
+		"    \u2514\u2500\u2500 ContigSet: BAAHUD010000000\n" +
+		"Project: PRJNA514245\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u2514\u2500\u2500 ContigSet: DBIITB010000000\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestRunLinksWritesSampleTree(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		switch query.Get("result") {
+		case "sample":
+			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkSampleFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMN05276490","secondary_sample_accession":"SRS123456","study_accession":"PRJEB45982;PRJNA302362"}]`))
+		case "read_run":
+			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkRunFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"run_accession":"SRR3675520","experiment_accession":"SRX1850792","sample_accession":"SAMN05276490","study_accession":"PRJNA302362"}]`))
+		case "wgs_set":
+			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkWGSSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"accession":"BAAHUD010000000","sample_accession":"SAMN05276490","study_accession":"PRJNA302362"}]`))
+		case "tsa_set", "tls_set":
+			if got := query.Get("query"); got != "sample_accession=SRS123456 OR secondary_sample_accession=SRS123456" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkContigSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Fatalf("result = %q", query.Get("result"))
+		}
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"links", "SRS123456"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "Project: PRJEB45982\n" +
+		"\u2514\u2500\u2500 Sample: SAMN05276490\n" +
+		"Project: PRJNA302362\n" +
+		"\u2514\u2500\u2500 Sample: SAMN05276490\n" +
+		"    \u251c\u2500\u2500 Experiment: SRX1850792\n" +
+		"    \u2502   \u2514\u2500\u2500 Run: SRR3675520\n" +
+		"    \u2514\u2500\u2500 ContigSet: BAAHUD010000000\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestRunLinksWritesExperimentTreeWithContigSet(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		switch query.Get("result") {
+		case "sample":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkSampleFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMD00654312","secondary_sample_accession":"SRS24913212","study_accession":"PRJEB90490;PRJDB16917"}]`))
+		case "read_run":
+			switch got := query.Get("query"); got {
+			case "experiment_accession=DRX494734", "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312":
+			default:
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkRunFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"run_accession":"DRR510832","experiment_accession":"DRX494734","sample_accession":"SAMD00654312","study_accession":"PRJDB16917"}]`))
+		case "wgs_set":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkWGSSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[` +
+				`{"accession":"BAAHUD010000000","sample_accession":"SAMD00654312","study_accession":"PRJDB16917","run_accession":"DRR510832"},` +
+				`{"accession":"DBIITB010000000","sample_accession":"SAMD00654312","study_accession":"PRJNA514245","run_accession":"DRR510832"}` +
+				`]`))
+		case "tsa_set", "tls_set":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkContigSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Fatalf("result = %q", query.Get("result"))
+		}
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"links", "DRX494734"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "Project: PRJEB90490\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"Project: PRJDB16917\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u251c\u2500\u2500 Experiment: DRX494734\n" +
+		"    \u2502   \u2514\u2500\u2500 Run: DRR510832\n" +
+		"    \u2514\u2500\u2500 ContigSet: BAAHUD010000000\n" +
+		"Project: PRJNA514245\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u2514\u2500\u2500 ContigSet: DBIITB010000000\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestRunLinksWritesProjectTree(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		switch query.Get("result") {
+		case "study":
+			if got := query.Get("query"); got != "study_accession=PRJNA302362 OR secondary_study_accession=PRJNA302362" {
+				t.Fatalf("query = %q", got)
+			}
+			switch got := query.Get("fields"); got {
+			case strings.Join(linkStudyFields, ","), "study_accession":
+				_, _ = w.Write([]byte(`[{"study_accession":"PRJNA302362","secondary_study_accession":"SRP076676"}]`))
+			default:
+				t.Fatalf("fields = %q", got)
+			}
+		case "read_run":
+			if got := query.Get("query"); got != "study_accession=PRJNA302362" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkRunFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[` +
+				`{"run_accession":"SRR1","experiment_accession":"SRX1","sample_accession":"SAMN1","study_accession":"PRJNA302362"},` +
+				`{"run_accession":"SRR2","experiment_accession":"SRX1","sample_accession":"SAMN1","study_accession":"PRJNA302362"},` +
+				`{"run_accession":"SRR3","experiment_accession":"SRX2","sample_accession":"SAMN2","study_accession":"PRJNA302362"}` +
+				`]`))
+		case "wgs_set":
+			if got := query.Get("query"); got != "study_accession=PRJNA302362" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkWGSSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"accession":"WGS1","sample_accession":"SAMN1","study_accession":"PRJNA302362"}]`))
+		case "tsa_set", "tls_set":
+			if got := query.Get("query"); got != "study_accession=PRJNA302362" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkContigSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Fatalf("result = %q", query.Get("result"))
+		}
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"links", "PRJNA302362"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "Project: PRJNA302362\n" +
+		"\u251c\u2500\u2500 Sample: SAMN1\n" +
+		"\u2502   \u251c\u2500\u2500 Experiment: SRX1\n" +
+		"\u2502   \u2502   \u251c\u2500\u2500 Run: SRR1\n" +
+		"\u2502   \u2502   \u2514\u2500\u2500 Run: SRR2\n" +
+		"\u2502   \u2514\u2500\u2500 ContigSet: WGS1\n" +
+		"\u2514\u2500\u2500 Sample: SAMN2\n" +
+		"    \u2514\u2500\u2500 Experiment: SRX2\n" +
+		"        \u2514\u2500\u2500 Run: SRR3\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestRunLinksWritesContigSetTree(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		switch query.Get("result") {
+		case "sample":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkSampleFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMD00654312","secondary_sample_accession":"SRS24913212","study_accession":"PRJEB90490;PRJDB16917"}]`))
+		case "wgs_set":
+			switch got := query.Get("query"); got {
+			case "wgs_set=DBIITB01":
+				if got := query.Get("fields"); got != strings.Join(linkWGSSetFields, ",") {
+					t.Fatalf("fields = %q", got)
+				}
+				_, _ = w.Write([]byte(`[{"accession":"DBIITB010000000","sample_accession":"SAMD00654312","study_accession":"PRJNA514245","run_accession":"DRR510832"}]`))
+			case "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312":
+				if got := query.Get("fields"); got != strings.Join(linkWGSSetFields, ",") {
+					t.Fatalf("fields = %q", got)
+				}
+				_, _ = w.Write([]byte(`[` +
+					`{"accession":"BAAHUD010000000","sample_accession":"SAMD00654312","study_accession":"PRJDB16917","run_accession":"DRR510832"},` +
+					`{"accession":"DBIITB010000000","sample_accession":"SAMD00654312","study_accession":"PRJNA514245","run_accession":"DRR510832"}` +
+					`]`))
+			default:
+				t.Fatalf("query = %q", got)
+			}
+		case "tsa_set", "tls_set":
+			switch got := query.Get("query"); got {
+			case "accession=DBIITB010000000", "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312":
+			default:
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkContigSetFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[]`))
+		case "read_run":
+			if got := query.Get("query"); got != "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312" {
+				t.Fatalf("query = %q", got)
+			}
+			if got := query.Get("fields"); got != strings.Join(linkRunFields, ",") {
+				t.Fatalf("fields = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"run_accession":"DRR510832","experiment_accession":"DRX494734","sample_accession":"SAMD00654312","study_accession":"PRJDB16917"}]`))
+		default:
+			t.Fatalf("result = %q", query.Get("result"))
+		}
+	}))
+	defer server.Close()
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"links", "DBIITB010000000"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "Project: PRJEB90490\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"Project: PRJDB16917\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u251c\u2500\u2500 Experiment: DRX494734\n" +
+		"    \u2502   \u2514\u2500\u2500 Run: DRR510832\n" +
+		"    \u2514\u2500\u2500 ContigSet: BAAHUD010000000\n" +
+		"Project: PRJNA514245\n" +
+		"\u2514\u2500\u2500 Sample: SAMD00654312\n" +
+		"    \u2514\u2500\u2500 ContigSet: DBIITB010000000\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestRunLinksRejectsUnsupportedAccessionType(t *testing.T) {
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"links", "GCF_000001405.40"})
+	})
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit code")
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want empty", stdout)
+	}
+}
+
 func TestRunSearchCountWritesTSV(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

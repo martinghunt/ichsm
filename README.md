@@ -100,6 +100,11 @@ Count runs for study/project `PRJEB1787` without fetching the run metadata:
 ichsm search -a PRJEB1787 --level run --count
 ```
 
+Show project, sample, experiment, run, and contig set links as a tree:
+```
+ichsm links SRR3675520
+```
+
 Get a FASTQ download manifest for sample `SAMN05276490`:
 ```
 ichsm reads -a SAMN05276490

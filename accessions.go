@@ -31,6 +31,8 @@ type accessionRegex struct {
 var accessionRegexes = []accessionRegex{
 	{re: regexp.MustCompile(`^(GC[AF]_[0-9]{9})(\.[0-9]*)*$`), typ: AccessionTypeAssembly, normalize: firstAccessionMatch},
 	{re: regexp.MustCompile(`^(?:([A-Z]{4})0{8,10}|([A-Z]{6})0{9,11})\.([0-9]+)$`), typ: AccessionTypeContigSet, normalize: normalizeWGSSetMasterAccession},
+	{re: regexp.MustCompile(`^([A-Z]{4}(?:0[1-9]|[1-9][0-9]))0{6}$`), typ: AccessionTypeContigSet, normalize: firstAccessionMatch},
+	{re: regexp.MustCompile(`^([A-Z]{6}(?:0[1-9]|[1-9][0-9]))0{7}$`), typ: AccessionTypeContigSet, normalize: firstAccessionMatch},
 	{re: regexp.MustCompile(`^([A-Z]{4}[0-9]{2}|[A-Z]{6}[0-9]{2})$`), typ: AccessionTypeContigSet, normalize: firstAccessionMatch},
 	{re: regexp.MustCompile(`^(PRJ(?:E|D|N)[A-Z][0-9]+)$`), typ: AccessionTypeStudy, normalize: firstAccessionMatch},
 	{re: regexp.MustCompile(`^((?:E|D|S)RP[0-9]{6,})$`), typ: AccessionTypeStudy, normalize: firstAccessionMatch},

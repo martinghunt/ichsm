@@ -107,20 +107,20 @@ func SearchKeyValue(queryType AccessionType, resultType AccessionType, accession
 		switch resultType {
 		case AccessionTypeStudy:
 			return "query", "study_accession=" + accession + " OR secondary_study_accession=" + accession, nil
-		case AccessionTypeSample, AccessionTypeRun, AccessionTypeAssembly:
+		case AccessionTypeSample, AccessionTypeRun, AccessionTypeAssembly, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet:
 			return "query", "study_accession=" + accession, nil
 		default:
 			return "", "", unsupportedSearchLevel(queryType, resultType)
 		}
 	case AccessionTypeSample:
 		switch resultType {
-		case AccessionTypeSample, AccessionTypeRun, AccessionTypeAssembly:
+		case AccessionTypeSample, AccessionTypeRun, AccessionTypeAssembly, AccessionTypeWGSSet, AccessionTypeTSASet, AccessionTypeTLSSet:
 			return "query", "sample_accession=" + accession + " OR secondary_sample_accession=" + accession, nil
 		default:
 			return "", "", unsupportedSearchLevel(queryType, resultType)
 		}
 	case AccessionTypeRun:
-		if resultType != AccessionTypeRun && resultType != AccessionTypeAssembly {
+		if resultType != AccessionTypeRun && resultType != AccessionTypeAssembly && resultType != AccessionTypeWGSSet {
 			return "", "", unsupportedSearchLevel(queryType, resultType)
 		}
 		return "query", "run_accession=" + accession, nil

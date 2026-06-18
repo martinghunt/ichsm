@@ -406,6 +406,53 @@ func TestResolveSearchLevelRejectsUnsupportedCombination(t *testing.T) {
 	}
 }
 
+func TestSearchKeyValueSupportsContigSetLinks(t *testing.T) {
+	tests := []struct {
+		name       string
+		queryType  AccessionType
+		resultType AccessionType
+		accession  string
+		wantValue  string
+	}{
+		{
+			name:       "sample to wgs set",
+			queryType:  AccessionTypeSample,
+			resultType: AccessionTypeWGSSet,
+			accession:  "SAMD00654312",
+			wantValue:  "sample_accession=SAMD00654312 OR secondary_sample_accession=SAMD00654312",
+		},
+		{
+			name:       "study to tsa set",
+			queryType:  AccessionTypeStudy,
+			resultType: AccessionTypeTSASet,
+			accession:  "PRJEB123",
+			wantValue:  "study_accession=PRJEB123",
+		},
+		{
+			name:       "run to wgs set",
+			queryType:  AccessionTypeRun,
+			resultType: AccessionTypeWGSSet,
+			accession:  "DRR510832",
+			wantValue:  "run_accession=DRR510832",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key, value, err := SearchKeyValue(tt.queryType, tt.resultType, tt.accession)
+			if err != nil {
+				t.Fatalf("SearchKeyValue() error = %v", err)
+			}
+			if key != "query" || value != tt.wantValue {
+				t.Fatalf("SearchKeyValue() = %q, %q; want query, %q", key, value, tt.wantValue)
+			}
+			if got, err := ResolveSearchLevel(tt.queryType, tt.resultType); err != nil || got != tt.resultType {
+				t.Fatalf("ResolveSearchLevel() = %q, %v; want %q, nil", got, err, tt.resultType)
+			}
+		})
+	}
+}
+
 func TestFieldPresetsAreNested(t *testing.T) {
 	for accessionType, presets := range fieldPresets {
 		for _, field := range presets[FieldPresetSmall] {
