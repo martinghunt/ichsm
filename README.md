@@ -146,6 +146,21 @@ Get runs for study/project `PRJEB1787`:
 ichsm search -a PRJEB1787 --level run
 ```
 
+Run an ENA field query for bacterial samples:
+```
+ichsm query --result sample --query 'tax_tree(2)' --columns sample_accession,scientific_name,tax_id
+```
+
+Run an ENA field query for bacterial Illumina runs:
+```
+ichsm query --result run --query 'tax_tree(2) AND instrument_platform=ILLUMINA' --columns sample_accession,run_accession,instrument_platform
+```
+
+List supported values for an ENA controlled vocabulary field:
+```
+ichsm get_values instrument_platform
+```
+
 Summarize study/project `PRJEB1787`, including linked IDs, ENA counts,
 sequencing platform counts, and publication count:
 ```

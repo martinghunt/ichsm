@@ -1,5 +1,7 @@
 package ichsm
 
+import "strings"
+
 const BasePortalURL = "https://www.ebi.ac.uk/ena/portal/api/"
 const BaseBrowserXMLURL = "https://www.ebi.ac.uk/ena/browser/api/xml/"
 
@@ -87,6 +89,24 @@ func supportsENAResult(resultType string) bool {
 // SupportsENAResult reports whether ichsm has an ENA search route for an ENA result type.
 func SupportsENAResult(resultType string) bool {
 	return supportsENAResult(resultType)
+}
+
+// NormalizeENAResult returns the ichsm accession type and concrete ENA result
+// id for an ichsm result alias such as "run" or an ENA result id such as
+// "read_run".
+func NormalizeENAResult(result string) (AccessionType, string, bool) {
+	result = strings.ToLower(strings.TrimSpace(result))
+	if result == "" {
+		return "", "", false
+	}
+	if info, ok := resultTypeIndex[result]; ok && info.enaSearch {
+		return info.accessionType, info.enaResult, true
+	}
+	accessionType := AccessionType(result)
+	if info, ok := accessionTypeIndex[accessionType]; ok && info.enaSearch && info.enaResult != "" {
+		return info.accessionType, info.enaResult, true
+	}
+	return "", "", false
 }
 
 func supportsNCBI(accessionType AccessionType) bool {

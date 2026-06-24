@@ -1,7 +1,7 @@
 # Fields and columns
 
-`ichsm search` writes metadata fields as output columns. The available fields
-depend on the result level and metadata source.
+`ichsm search` and `ichsm query` write metadata fields as output columns. The
+available fields depend on the result level and metadata source.
 
 For ENA-backed searches, field names come from ENA result types such as
 `sample`, `read_run`, `study`, `assembly`, `analysis`, `wgs_set`, `tsa_set`,
@@ -61,6 +61,13 @@ ichsm get_fields read_run --sort ichsm_columns
 The `ichsm_columns` column reports `SMALL`, `DEFAULT`, `BIG`, `ALL`, or `.`
 for fields that are not part of an `ichsm` preset.
 
+For fields whose type is `controlled value`, use
+[`ichsm get_values`](get-values.md) to list allowed values:
+
+```
+ichsm get_values instrument_platform
+```
+
 See the [`ichsm get_fields` command reference](get-fields.md) for flags and
 output options.
 
@@ -90,6 +97,13 @@ For a sample-level search, use:
 
 ```
 ichsm get_fields sample
+```
+
+For `ichsm query`, use the same result name that you pass to `--result`:
+
+```
+ichsm get_fields read_run
+ichsm query --result read_run --query 'tax_tree(2)' --columns sample_accession,run_accession
 ```
 
 Use [`ichsm get_fields`](get-fields.md) with the matching ENA result type before

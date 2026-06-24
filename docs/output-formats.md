@@ -22,11 +22,13 @@ record and want fields down the left-hand side.
 | --- | --- | --- |
 | `identify` | `table` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `search` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
+| `query` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `summary` | `ttable` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `reads` | `manifest` | `manifest`, `table`, `ttable`, `ttsv`, `urls`, `wget`, `curl`, `md5` |
 | `links` | `tree` | `tree`, `json`, `table`, `tsv` |
 | `pubs` | `table` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `get_fields` | `tsv` | `table`, `tsv`, `ttable`, `ttsv` |
+| `get_values` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 
 `open` and `completion` do not use `--outfmt`.
 
