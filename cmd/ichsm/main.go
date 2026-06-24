@@ -46,7 +46,7 @@ func newRootCommand(out io.Writer, errOut io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "ichsm",
 		Short:         "Find sequence metadata from ENA and NCBI",
-		Version:       version,
+		Version:       displayVersion(version),
 		SilenceUsage:  true,
 		SilenceErrors: false,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -55,9 +55,16 @@ func newRootCommand(out io.Writer, errOut io.Writer) *cobra.Command {
 	}
 	cmd.SetOut(out)
 	cmd.SetErr(errOut)
-	cmd.SetVersionTemplate("{{.Version}}\n")
+	cmd.SetVersionTemplate("{{.Name}} {{.Version}}\n")
 	cmd.AddCommand(newSearchCommand(), newSummaryCommand(), newReadsCommand(), newLinksCommand(), newPubsCommand(), newOpenCommand(), newIdentifyCommand(), newGetFieldsCommand())
 	return cmd
+}
+
+func displayVersion(raw string) string {
+	if len(raw) > 1 && (raw[0] == 'v' || raw[0] == 'V') && raw[1] >= '0' && raw[1] <= '9' {
+		return raw[1:]
+	}
+	return raw
 }
 
 func newNCBIConfiguredClient(apiKey string, email string) *ichsm.Client {
