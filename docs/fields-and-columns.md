@@ -1,7 +1,7 @@
 # Fields and columns
 
-`ichsm search` writes metadata fields as output columns. The available fields
-depend on the result level and metadata source.
+`ichsm search` and `ichsm query` write metadata fields as output columns. The
+available fields depend on the result level and metadata source.
 
 For ENA-backed searches, field names come from ENA result types such as
 `sample`, `read_run`, `study`, `assembly`, `analysis`, `wgs_set`, `tsa_set`,
@@ -90,6 +90,13 @@ For a sample-level search, use:
 
 ```
 ichsm get_fields sample
+```
+
+For `ichsm query`, use the same result name that you pass to `--result`:
+
+```
+ichsm get_fields read_run
+ichsm query --result read_run --query 'tax_tree(2)' --columns sample_accession,run_accession
 ```
 
 Use [`ichsm get_fields`](get-fields.md) with the matching ENA result type before

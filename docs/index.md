@@ -63,44 +63,50 @@ wget -c -O 'reads/SRR3675520_2.fastq.gz' 'https://.../SRR3675520_2.fastq.gz'
    ichsm search -a SAMN05276490
    ```
 
-4. Summarize a project:
+4. Run an ENA field query, for example bacterial samples:
+
+   ```
+   ichsm query --result sample --query 'tax_tree(2)' --columns sample_accession,scientific_name,tax_id
+   ```
+
+5. Summarize a project:
 
    ```
    ichsm summary PRJEB1787
    ```
 
-5. Print FASTQ download commands:
+6. Print FASTQ download commands:
 
    ```
    ichsm reads -a SAMN05276490 --outfmt wget --output-dir reads
    ```
 
-6. Show linked project, sample, assembly, experiment, run, analysis, and
+7. Show linked project, sample, assembly, experiment, run, analysis, and
    contig set accessions:
 
    ```
    ichsm links SRR3675520
    ```
 
-7. Show PubMed publications linked to a project:
+8. Show PubMed publications linked to a project:
 
    ```
    ichsm pubs PRJEB1787
    ```
 
-8. Open an accession in your browser:
+9. Open an accession in your browser:
 
    ```
    ichsm open GCF_000001405.40
    ```
 
-9. List ENA fields for run metadata:
+10. List ENA fields for run metadata:
 
    ```
    ichsm get_fields read_run
    ```
 
-10. Generate shell completion:
+11. Generate shell completion:
 
    ```
    ichsm completion zsh
@@ -121,6 +127,7 @@ output-formats
 fields-and-columns
 identify
 search-command
+query
 get-fields
 summary
 reads

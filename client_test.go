@@ -659,6 +659,116 @@ func TestCountENAFilteredGroupsORQuery(t *testing.T) {
 	}
 }
 
+func TestNormalizeENAResult(t *testing.T) {
+	tests := []struct {
+		in         string
+		wantType   AccessionType
+		wantResult string
+		wantOK     bool
+	}{
+		{in: "run", wantType: AccessionTypeRun, wantResult: "read_run", wantOK: true},
+		{in: "read_run", wantType: AccessionTypeRun, wantResult: "read_run", wantOK: true},
+		{in: "sample", wantType: AccessionTypeSample, wantResult: "sample", wantOK: true},
+		{in: "contig_set"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			gotType, gotResult, gotOK := NormalizeENAResult(tt.in)
+			if gotType != tt.wantType || gotResult != tt.wantResult || gotOK != tt.wantOK {
+				t.Fatalf("NormalizeENAResult(%q) = %q, %q, %v; want %q, %q, %v", tt.in, gotType, gotResult, gotOK, tt.wantType, tt.wantResult, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestQueryENA(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "read_run" {
+			t.Fatalf("result = %q, want read_run", got)
+		}
+		if got := query.Get("query"); got != "tax_tree(2) AND instrument_platform=ILLUMINA" {
+			t.Fatalf("query = %q", got)
+		}
+		if got := query.Get("fields"); got != "sample_accession,run_accession,instrument_platform" {
+			t.Fatalf("fields = %q", got)
+		}
+		if got := query.Get("limit"); got != "10" {
+			t.Fatalf("limit = %q", got)
+		}
+		if got := query.Get("offset"); got != "5" {
+			t.Fatalf("offset = %q", got)
+		}
+		if got := query.Get("format"); got != "json" {
+			t.Fatalf("format = %q, want json", got)
+		}
+		_, _ = w.Write([]byte(`[{"sample_accession":"SAMEA1","run_accession":"ERR1","instrument_platform":"ILLUMINA"}]`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	result, err := client.QueryENA(context.Background(), ENAQueryOptions{
+		Result: "run",
+		Query:  "tax_tree(2) AND instrument_platform=ILLUMINA",
+		Fields: []string{"sample_accession", "run_accession", "instrument_platform"},
+		Limit:  10,
+		Offset: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ResultType != AccessionTypeRun || result.ENAResult != "read_run" {
+		t.Fatalf("result = %q/%q, want run/read_run", result.ResultType, result.ENAResult)
+	}
+	if !reflect.DeepEqual(result.Fields, []string{"sample_accession", "run_accession", "instrument_platform"}) {
+		t.Fatalf("fields = %#v", result.Fields)
+	}
+	if got := result.Records[0]["source"]; got != string(SearchSourceENA) {
+		t.Fatalf("source = %q, want ena", got)
+	}
+}
+
+func TestCountENAQueryIgnoresPaging(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/count" {
+			t.Fatalf("path = %q, want /count", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "sample" {
+			t.Fatalf("result = %q, want sample", got)
+		}
+		if got := query.Get("query"); got != "tax_tree(2)" {
+			t.Fatalf("query = %q", got)
+		}
+		if got := query.Get("limit"); got != "" {
+			t.Fatalf("limit = %q, want empty", got)
+		}
+		if got := query.Get("offset"); got != "" {
+			t.Fatalf("offset = %q, want empty", got)
+		}
+		_, _ = w.Write([]byte(`{"count":"42"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	resultType, enaResult, count, err := client.CountENAQuery(context.Background(), ENAQueryOptions{
+		Result: "sample",
+		Query:  "tax_tree(2)",
+		Limit:  10,
+		Offset: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultType != AccessionTypeSample || enaResult != "sample" || count != 42 {
+		t.Fatalf("CountENAQuery() = %q, %q, %d; want sample, sample, 42", resultType, enaResult, count)
+	}
+}
+
 func TestResolveSearchLevelRejectsUnsupportedCombination(t *testing.T) {
 	_, err := ResolveSearchLevel(AccessionTypeRun, AccessionTypeSample)
 	if err == nil {

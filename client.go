@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -84,6 +85,24 @@ type SearchResult struct {
 	Source         SearchSource  `json:"source"`
 	Fields         []string      `json:"fields"`
 	Records        []Record      `json:"records"`
+}
+
+// ENAQueryOptions configures a raw ENA Portal API search query.
+type ENAQueryOptions struct {
+	Result string
+	Query  string
+	Fields []string
+	Limit  int
+	Offset int
+}
+
+// ENAQueryResult contains records returned by a raw ENA Portal API query.
+type ENAQueryResult struct {
+	ResultType AccessionType `json:"result_type"`
+	ENAResult  string        `json:"ena_result"`
+	Query      string        `json:"query"`
+	Fields     []string      `json:"fields"`
+	Records    []Record      `json:"records"`
 }
 
 // NewClient returns a client configured for the public ENA and NCBI metadata services.
@@ -196,6 +215,47 @@ func ResolveFields(accessionType AccessionType, fields []string) ([]string, erro
 // Query searches ENA for one normalized accession at a requested output level.
 func (c *Client) Query(ctx context.Context, accession string, accessionType AccessionType, fields []string, level AccessionType) (AccessionType, []string, []Record, error) {
 	return c.queryENA(ctx, accession, accessionType, fields, level)
+}
+
+// QueryENA searches ENA using a raw ENA Portal API query string. Result accepts
+// either an ichsm result alias such as "run" or a concrete ENA result id such as
+// "read_run".
+func (c *Client) QueryENA(ctx context.Context, opts ENAQueryOptions) (ENAQueryResult, error) {
+	resultType, enaResult, resolvedFields, params, err := enaRawQueryParams(opts, true)
+	if err != nil {
+		return ENAQueryResult{}, err
+	}
+
+	records, err := c.requestJSON(ctx, "search", params)
+	if err != nil {
+		return ENAQueryResult{}, err
+	}
+	addSourceToRecords(records, SearchSourceENA)
+
+	return ENAQueryResult{
+		ResultType: resultType,
+		ENAResult:  enaResult,
+		Query:      strings.TrimSpace(opts.Query),
+		Fields:     resolvedFields,
+		Records:    records,
+	}, nil
+}
+
+// CountENAQuery returns the number of ENA records matching a raw ENA Portal API
+// query string.
+func (c *Client) CountENAQuery(ctx context.Context, opts ENAQueryOptions) (AccessionType, string, int, error) {
+	opts.Limit = 0
+	opts.Offset = 0
+	resultType, enaResult, _, params, err := enaRawQueryParams(opts, false)
+	if err != nil {
+		return "", "", 0, err
+	}
+
+	count, err := c.requestCount(ctx, params)
+	if err != nil {
+		return "", "", 0, err
+	}
+	return resultType, enaResult, count, nil
 }
 
 // QueryWithSource searches for one accession using the requested source. Auto
@@ -327,6 +387,49 @@ func enaSearchParams(accession string, accessionType AccessionType, resultType A
 		params.Set("fields", strings.Join(fields, ","))
 	}
 	return endpoint, params, nil
+}
+
+func enaRawQueryParams(opts ENAQueryOptions, includeFields bool) (AccessionType, string, []string, url.Values, error) {
+	resultType, enaResult, ok := NormalizeENAResult(opts.Result)
+	if !ok {
+		return "", "", nil, nil, fmt.Errorf("unsupported ENA result %q; expected study, sample, run/read_run, assembly, sequence, coding, analysis, wgs_set, tsa_set, or tls_set", opts.Result)
+	}
+
+	query := strings.TrimSpace(opts.Query)
+	if query == "" {
+		return "", "", nil, nil, errors.New("ENA query is required")
+	}
+	if opts.Limit < 0 {
+		return "", "", nil, nil, fmt.Errorf("limit must be non-negative")
+	}
+	if opts.Offset < 0 {
+		return "", "", nil, nil, fmt.Errorf("offset must be non-negative")
+	}
+
+	resolvedFields := []string(nil)
+	if includeFields {
+		var err error
+		resolvedFields, err = ResolveFields(resultType, opts.Fields)
+		if err != nil {
+			return "", "", nil, nil, err
+		}
+	}
+
+	params := url.Values{}
+	params.Set("result", enaResult)
+	params.Set("query", query)
+	params.Set("format", "json")
+	if includeFields && len(resolvedFields) > 0 {
+		params.Set("fields", strings.Join(resolvedFields, ","))
+	}
+	if opts.Limit > 0 {
+		params.Set("limit", strconv.Itoa(opts.Limit))
+	}
+	if opts.Offset > 0 {
+		params.Set("offset", strconv.Itoa(opts.Offset))
+	}
+
+	return resultType, enaResult, resolvedFields, params, nil
 }
 
 // CountENA returns the number of ENA records matching one normalized accession
