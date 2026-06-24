@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Make `ichsm --version` print `ichsm X.Y.Z`, normalizing release tags like `vX.Y.Z` for display.
+
 ## [0.5.0] - 2026-06-18
 
 ### Added
