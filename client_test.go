@@ -732,6 +732,32 @@ func TestQueryENA(t *testing.T) {
 	}
 }
 
+func TestGetControlledVocabulary(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/controlledVocab" {
+			t.Fatalf("path = %q, want /controlledVocab", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("field"); got != "instrument_platform" {
+			t.Fatalf("field = %q, want instrument_platform", got)
+		}
+		_, _ = w.Write([]byte(`[{"value":"ILLUMINA","description":""},{"value":"OXFORD_NANOPORE","description":"Oxford Nanopore Technologies"}]`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	values, err := client.GetControlledVocabulary(context.Background(), "instrument_platform")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []ENAControlledVocabValue{
+		{Value: "ILLUMINA"},
+		{Value: "OXFORD_NANOPORE", Description: "Oxford Nanopore Technologies"},
+	}
+	if !reflect.DeepEqual(values, want) {
+		t.Fatalf("values = %#v, want %#v", values, want)
+	}
+}
+
 func TestCountENAQueryIgnoresPaging(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/count" {

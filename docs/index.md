@@ -106,7 +106,13 @@ wget -c -O 'reads/SRR3675520_2.fastq.gz' 'https://.../SRR3675520_2.fastq.gz'
    ichsm get_fields read_run
    ```
 
-11. Generate shell completion:
+11. List values for an ENA controlled vocabulary field:
+
+   ```
+   ichsm get_values instrument_platform
+   ```
+
+12. Generate shell completion:
 
    ```
    ichsm completion zsh
@@ -129,6 +135,7 @@ identify
 search-command
 query
 get-fields
+get-values
 summary
 reads
 links

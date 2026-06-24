@@ -61,6 +61,13 @@ ichsm get_fields read_run --sort ichsm_columns
 The `ichsm_columns` column reports `SMALL`, `DEFAULT`, `BIG`, `ALL`, or `.`
 for fields that are not part of an `ichsm` preset.
 
+For fields whose type is `controlled value`, use
+[`ichsm get_values`](get-values.md) to list allowed values:
+
+```
+ichsm get_values instrument_platform
+```
+
 See the [`ichsm get_fields` command reference](get-fields.md) for flags and
 output options.
 

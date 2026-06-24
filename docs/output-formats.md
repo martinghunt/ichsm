@@ -28,6 +28,7 @@ record and want fields down the left-hand side.
 | `links` | `tree` | `tree`, `json`, `table`, `tsv` |
 | `pubs` | `table` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `get_fields` | `tsv` | `table`, `tsv`, `ttable`, `ttsv` |
+| `get_values` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 
 `open` and `completion` do not use `--outfmt`.
 

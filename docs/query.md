@@ -14,6 +14,10 @@ ichsm query --result sample --query 'tax_tree(2)' \
 `tax_tree(2)` means taxon 2 and descendants. `tax_id=2` matches only records
 whose taxon is exactly 2.
 
+Use [`ichsm get_fields`](get-fields.md) to list queryable fields. For fields
+whose type is `controlled value`, use [`ichsm get_values`](get-values.md) to
+list allowed values.
+
 ## Usage
 
 ```
@@ -51,6 +55,12 @@ Find bacterial Illumina runs:
 ichsm query --result run \
   --query 'tax_tree(2) AND instrument_platform=ILLUMINA' \
   --columns sample_accession,run_accession,instrument_platform
+```
+
+List supported platform values:
+
+```
+ichsm get_values instrument_platform
 ```
 
 Count bacterial Oxford Nanopore runs without fetching metadata:

@@ -17,6 +17,9 @@ column showing whether a field appears in the `SMALL`, `DEFAULT`, `BIG`, or
 `ALL` presets used by `ichsm search` and `ichsm query`. For how those presets
 affect output columns, see [Fields and columns](fields-and-columns.md).
 
+For rows whose `type` is `controlled value`, use
+[`ichsm get_values`](get-values.md) to list allowed values.
+
 ## Usage
 
 ```
@@ -57,6 +60,12 @@ Sort fields by the `ichsm` preset column:
 
 ```
 ichsm get_fields read_run --sort ichsm_columns
+```
+
+List values for a controlled vocabulary field:
+
+```
+ichsm get_values instrument_platform
 ```
 
 Then use the chosen field names with `ichsm search --columns` or

@@ -105,6 +105,12 @@ type ENAQueryResult struct {
 	Records    []Record      `json:"records"`
 }
 
+// ENAControlledVocabValue is one value from an ENA controlled vocabulary field.
+type ENAControlledVocabValue struct {
+	Value       string `json:"value"`
+	Description string `json:"description"`
+}
+
 // NewClient returns a client configured for the public ENA and NCBI metadata services.
 func NewClient() *Client {
 	return &Client{
@@ -674,6 +680,28 @@ func (c *Client) GetAllowedFields(ctx context.Context, dataType string) (string,
 	params := url.Values{}
 	params.Set("result", dataType)
 	return c.requestText(ctx, "searchFields", params)
+}
+
+// GetControlledVocabulary returns the allowed values for an ENA controlled
+// vocabulary field, such as instrument_platform or library_layout.
+func (c *Client) GetControlledVocabulary(ctx context.Context, field string) ([]ENAControlledVocabValue, error) {
+	field = strings.TrimSpace(field)
+	if field == "" {
+		return nil, errors.New("controlled vocabulary field is required")
+	}
+
+	params := url.Values{}
+	params.Set("field", field)
+	body, err := c.request(ctx, "controlledVocab", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var values []ENAControlledVocabValue
+	if err := json.Unmarshal(body, &values); err != nil {
+		return nil, fmt.Errorf("error parsing ENA controlled vocabulary json: %w", err)
+	}
+	return values, nil
 }
 
 // GetResultTypes returns the ENA results response listing available data types.
