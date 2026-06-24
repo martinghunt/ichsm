@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add `ichsm query` to run arbitrary ENA Portal API queries with selected result types, fields, counts, limits, offsets, and JSON/table/TSV output.
+- Add `ichsm get_values <field>` to list ENA controlled vocabulary values, such as supported `instrument_platform` or `library_layout` values for use in queries.
+
 ### Changed
 - Make `ichsm --version` print `ichsm X.Y.Z`, normalizing release tags like `vX.Y.Z` for display.
 
