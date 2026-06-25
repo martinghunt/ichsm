@@ -2,6 +2,7 @@ package ichsm
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,6 +11,24 @@ import (
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type errorReadCloser struct {
+	err error
+}
+
+func (r errorReadCloser) Read(_ []byte) (int, error) {
+	return 0, r.err
+}
+
+func (r errorReadCloser) Close() error {
+	return nil
+}
 
 func newTestClient(server *httptest.Server) *Client {
 	return &Client{
@@ -220,6 +239,45 @@ func TestRequestRetriesTransientServerError(t *testing.T) {
 	client.MaxRequestRetries = 2
 	client.RequestRetryBaseDelay = time.Millisecond
 	client.RequestRetryMaxDelay = time.Millisecond
+	body, err := client.requestText(context.Background(), "search", url.Values{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body != "ok" {
+		t.Fatalf("body = %q, want ok", body)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
+	}
+}
+
+func TestRequestRetriesTransientReadError(t *testing.T) {
+	requests := 0
+	client := &Client{
+		BaseURL: "https://example.test/",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			requests++
+			if requests == 1 {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       errorReadCloser{err: io.ErrUnexpectedEOF},
+					Header:     http.Header{},
+					Request:    req,
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("ok")),
+				Header:     http.Header{},
+				Request:    req,
+			}, nil
+		})},
+		ENARequestsPerSecond:  -1,
+		MaxRequestRetries:     2,
+		RequestRetryBaseDelay: time.Millisecond,
+		RequestRetryMaxDelay:  time.Millisecond,
+	}
+
 	body, err := client.requestText(context.Background(), "search", url.Values{})
 	if err != nil {
 		t.Fatal(err)
@@ -729,6 +787,45 @@ func TestQueryENA(t *testing.T) {
 	}
 	if got := result.Records[0]["source"]; got != string(SearchSourceENA) {
 		t.Fatalf("source = %q, want ena", got)
+	}
+}
+
+func TestQueryENATSV(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "read_run" {
+			t.Fatalf("result = %q, want read_run", got)
+		}
+		if got := query.Get("format"); got != "tsv" {
+			t.Fatalf("format = %q, want tsv", got)
+		}
+		if got := query.Get("fields"); got != "sample_accession,run_accession,instrument_platform" {
+			t.Fatalf("fields = %q", got)
+		}
+		_, _ = w.Write([]byte("sample_accession\trun_accession\tinstrument_platform\nSAMEA1\tERR1\tILLUMINA\nSAMEA2\tERR2\t\n"))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	result, err := client.QueryENATSV(context.Background(), ENAQueryOptions{
+		Result: "run",
+		Query:  "tax_tree(2)",
+		Fields: []string{"sample_accession", "run_accession", "instrument_platform"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ResultType != AccessionTypeRun || result.ENAResult != "read_run" {
+		t.Fatalf("result = %q/%q, want run/read_run", result.ResultType, result.ENAResult)
+	}
+	if got := result.Records[0]["run_accession"]; got != "ERR1" {
+		t.Fatalf("run_accession = %q, want ERR1", got)
+	}
+	if got := result.Records[1]["instrument_platform"]; got != nil {
+		t.Fatalf("instrument_platform = %#v, want nil", got)
 	}
 }
 

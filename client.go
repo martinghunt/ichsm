@@ -3,11 +3,13 @@ package ichsm
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -61,6 +63,7 @@ const (
 	defaultNCBIRequestsPerSecond       = 3
 	defaultNCBIAPIKeyRequestsPerSecond = 10
 	defaultMaxRequestRetries           = 5
+	defaultHTTPTimeout                 = 2 * time.Minute
 	defaultRetryBaseDelay              = 250 * time.Millisecond
 	defaultRetryMaxDelay               = 5 * time.Second
 )
@@ -116,7 +119,7 @@ func NewClient() *Client {
 	return &Client{
 		BaseURL: BasePortalURL,
 		HTTPClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: defaultHTTPTimeout,
 		},
 	}
 }
@@ -233,6 +236,35 @@ func (c *Client) QueryENA(ctx context.Context, opts ENAQueryOptions) (ENAQueryRe
 	}
 
 	records, err := c.requestJSON(ctx, "search", params)
+	if err != nil {
+		return ENAQueryResult{}, err
+	}
+	addSourceToRecords(records, SearchSourceENA)
+
+	return ENAQueryResult{
+		ResultType: resultType,
+		ENAResult:  enaResult,
+		Query:      strings.TrimSpace(opts.Query),
+		Fields:     resolvedFields,
+		Records:    records,
+	}, nil
+}
+
+// QueryENATSV searches ENA using a raw ENA Portal API query string and parses a
+// TSV response. It is useful for large tabular searches where JSON overhead is
+// unnecessary.
+func (c *Client) QueryENATSV(ctx context.Context, opts ENAQueryOptions) (ENAQueryResult, error) {
+	resultType, enaResult, resolvedFields, params, err := enaRawQueryParams(opts, true)
+	if err != nil {
+		return ENAQueryResult{}, err
+	}
+	params.Set("format", "tsv")
+
+	text, err := c.requestText(ctx, "search", params)
+	if err != nil {
+		return ENAQueryResult{}, err
+	}
+	records, err := parseTSVRecords(text)
 	if err != nil {
 		return ENAQueryResult{}, err
 	}
@@ -745,6 +777,38 @@ func (c *Client) requestJSON(ctx context.Context, path string, params url.Values
 	return results, nil
 }
 
+func parseTSVRecords(text string) ([]Record, error) {
+	reader := csv.NewReader(strings.NewReader(text))
+	reader.Comma = '\t'
+	reader.FieldsPerRecord = -1
+
+	rows, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("error parsing tsv from query: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	header := rows[0]
+	records := make([]Record, 0, len(rows)-1)
+	for _, row := range rows[1:] {
+		record := Record{}
+		for i, key := range header {
+			if key == "" {
+				continue
+			}
+			var value any
+			if i < len(row) && row[i] != "" {
+				value = row[i]
+			}
+			record[key] = value
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
 func (c *Client) requestText(ctx context.Context, path string, params url.Values) (string, error) {
 	body, err := c.request(ctx, path, params)
 	if err != nil {
@@ -826,7 +890,7 @@ func (c *Client) requestOnce(ctx context.Context, requestURL string) ([]byte, er
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error reading data from %s: %w", requestURL, err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, &requestStatusError{
@@ -853,16 +917,34 @@ func (e *requestStatusError) Error() string {
 
 func isRetryableRequestError(err error) bool {
 	statusErr, ok := err.(*requestStatusError)
-	if !ok {
+	if ok {
+		if statusErr.statusCode == http.StatusTooManyRequests {
+			return true
+		}
+		return statusErr.statusCode == http.StatusInternalServerError ||
+			statusErr.statusCode == http.StatusBadGateway ||
+			statusErr.statusCode == http.StatusServiceUnavailable ||
+			statusErr.statusCode == http.StatusGatewayTimeout
+	}
+
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	if statusErr.statusCode == http.StatusTooManyRequests {
+	if errors.Is(err, io.ErrUnexpectedEOF) {
 		return true
 	}
-	return statusErr.statusCode == http.StatusInternalServerError ||
-		statusErr.statusCode == http.StatusBadGateway ||
-		statusErr.statusCode == http.StatusServiceUnavailable ||
-		statusErr.statusCode == http.StatusGatewayTimeout
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary()) {
+		return true
+	}
+
+	errText := strings.ToLower(err.Error())
+	return strings.Contains(errText, "can't assign requested address") ||
+		strings.Contains(errText, "connection reset by peer") ||
+		strings.Contains(errText, "broken pipe") ||
+		strings.Contains(errText, "server closed idle connection") ||
+		strings.Contains(errText, "unexpected eof")
 }
 
 func (c *Client) requestRetryDelay(attempt int, err error) time.Duration {
@@ -1043,5 +1125,5 @@ func (c *Client) httpClient() *http.Client {
 		return c.HTTPClient
 	}
 
-	return &http.Client{Timeout: 30 * time.Second}
+	return &http.Client{Timeout: defaultHTTPTimeout}
 }

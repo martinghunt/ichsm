@@ -23,6 +23,7 @@ record and want fields down the left-hand side.
 | `identify` | `table` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `search` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `query` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
+| `match` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `summary` | `ttable` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `reads` | `manifest` | `manifest`, `table`, `ttable`, `ttsv`, `urls`, `wget`, `curl`, `md5` |
 | `links` | `tree` | `tree`, `json`, `table`, `tsv` |

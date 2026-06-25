@@ -18,6 +18,9 @@ Use [`ichsm get_fields`](get-fields.md) to list queryable fields. For fields
 whose type is `controlled value`, use [`ichsm get_values`](get-values.md) to
 list allowed values.
 
+Use [`ichsm match`](match.md) when you need to group query results and require
+that each group contains rows matching multiple conditions.
+
 ## Usage
 
 ```
