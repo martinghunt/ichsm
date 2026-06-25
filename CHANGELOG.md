@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-25
+
 ### Added
 - Add `ichsm query` to run arbitrary ENA Portal API queries with selected result types, fields, counts, limits, offsets, and JSON/table/TSV output.
 - Add `ichsm match` to group ENA query results and keep groups whose rows satisfy repeated `--has` requirements, with a default count-first intersection strategy, comma-separated OR values, semicolon-separated same-row terms, and `--record-scope` control for record output.
@@ -90,7 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release `v0.1.0`, before changelog tracking started in this file.
 
-[Unreleased]: https://github.com/martinghunt/ichsm/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/martinghunt/ichsm/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/martinghunt/ichsm/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/martinghunt/ichsm/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/martinghunt/ichsm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/martinghunt/ichsm/compare/v0.2.0...v0.3.0
