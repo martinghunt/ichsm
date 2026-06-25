@@ -43,6 +43,7 @@ func writeAlignedRows(out io.Writer, rows [][]string) error {
 		return nil
 	}
 
+	rows = sanitizeTabularRows(rows)
 	widths := make([]int, maxRowWidth(rows))
 	for _, row := range rows {
 		for i, value := range row {
@@ -69,6 +70,7 @@ func writeAlignedRows(out io.Writer, rows [][]string) error {
 
 func writeDelimitedRows(out io.Writer, rows [][]string, delimiter string) error {
 	for _, row := range rows {
+		row = sanitizeTabularRow(row)
 		fmt.Fprintln(out, strings.Join(row, delimiter))
 	}
 	return nil
@@ -121,4 +123,43 @@ func maxRowWidth(rows [][]string) int {
 		}
 	}
 	return maxWidth
+}
+
+func sanitizeTabularRows(rows [][]string) [][]string {
+	out := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, sanitizeTabularRow(row))
+	}
+	return out
+}
+
+func sanitizeTabularRow(row []string) []string {
+	out := make([]string, len(row))
+	for i, value := range row {
+		out[i] = sanitizeTabularCell(value)
+	}
+	return out
+}
+
+func sanitizeTabularCell(value string) string {
+	var builder strings.Builder
+	changed := false
+	lastWasSpace := false
+	for _, char := range value {
+		switch char {
+		case '\n', '\r', '\t':
+			changed = true
+			if builder.Len() > 0 && !lastWasSpace {
+				builder.WriteByte(' ')
+				lastWasSpace = true
+			}
+		default:
+			builder.WriteRune(char)
+			lastWasSpace = char == ' '
+		}
+	}
+	if !changed {
+		return value
+	}
+	return strings.TrimSpace(builder.String())
 }

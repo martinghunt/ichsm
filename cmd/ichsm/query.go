@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -20,6 +21,7 @@ type queryOptions struct {
 	offset  int
 	count   bool
 	debug   bool
+	verbose bool
 }
 
 type queryCountResult struct {
@@ -45,6 +47,7 @@ func newQueryCommand() *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.BoolVar(&opts.debug, "debug", false, "More verbose logging")
+	flags.BoolVar(&opts.verbose, "verbose", false, "Print download progress to stderr")
 	flags.StringVarP(&opts.result, "result", "r", "", "ENA result type to query, such as sample or read_run")
 	flags.StringVarP(&opts.query, "query", "q", "", "ENA Portal API query string, such as tax_tree(2)")
 	flags.StringVarP(&opts.columns, "columns", "c", opts.columns, "Columns/fields to output, comma-separated, or SMALL, DEFAULT, BIG, ALL")
@@ -90,6 +93,10 @@ func executeQuery(cmd *cobra.Command, opts queryOptions) error {
 		logQuery(opts)
 	}
 
+	if outfmt == outputFormatTSV && !requestedAllFields(fields) {
+		return streamQueryTSV(cmd.Context(), client, queryOpts, cmd.OutOrStdout(), opts.verbose, cmd.ErrOrStderr())
+	}
+
 	result, err := client.QueryENA(cmd.Context(), queryOpts)
 	if err != nil {
 		return err
@@ -99,6 +106,37 @@ func executeQuery(cmd *cobra.Command, opts queryOptions) error {
 		return writeJSONValue(cmd.OutOrStdout(), result.Records)
 	}
 	return writeRowsForOutputFormat(cmd.OutOrStdout(), queryRows(result), outfmt)
+}
+
+func streamQueryTSV(ctx context.Context, client *ichsm.Client, opts ichsm.ENAQueryOptions, out io.Writer, verbose bool, errOut io.Writer) error {
+	var columns []string
+	var records int
+	_, err := client.StreamENATSV(ctx, opts, func(result ichsm.ENAQueryResult) error {
+		columns = append([]string(nil), result.Fields...)
+		_, err := fmt.Fprintln(out, strings.Join(columns, "\t"))
+		return err
+	}, func(record ichsm.Record) error {
+		records++
+		row := make([]string, 0, len(columns))
+		for _, column := range columns {
+			row = append(row, formatRecordColumn(record, column, false))
+		}
+		row = sanitizeTabularRow(row)
+		if _, err := fmt.Fprintln(out, strings.Join(row, "\t")); err != nil {
+			return err
+		}
+		if verbose && records%100000 == 0 {
+			fmt.Fprintf(errOut, "downloaded %d records\n", records)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if verbose {
+		fmt.Fprintf(errOut, "downloaded %d records\n", records)
+	}
+	return nil
 }
 
 func parseColumnList(columns string) []string {

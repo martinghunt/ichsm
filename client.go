@@ -254,29 +254,64 @@ func (c *Client) QueryENA(ctx context.Context, opts ENAQueryOptions) (ENAQueryRe
 // TSV response. It is useful for large tabular searches where JSON overhead is
 // unnecessary.
 func (c *Client) QueryENATSV(ctx context.Context, opts ENAQueryOptions) (ENAQueryResult, error) {
+	var records []Record
+	result, err := c.StreamENATSV(ctx, opts, nil, func(record Record) error {
+		records = append(records, record)
+		return nil
+	})
+	if err != nil {
+		return ENAQueryResult{}, err
+	}
+	result.Records = records
+	return result, nil
+}
+
+// StreamENATSV searches ENA using a raw ENA Portal API query string, requests
+// TSV output, and calls onRecord for each parsed data row as it arrives. The
+// optional onHeader callback is called after the TSV header is parsed and before
+// the first record callback.
+func (c *Client) StreamENATSV(ctx context.Context, opts ENAQueryOptions, onHeader func(ENAQueryResult) error, onRecord func(Record) error) (ENAQueryResult, error) {
 	resultType, enaResult, resolvedFields, params, err := enaRawQueryParams(opts, true)
 	if err != nil {
 		return ENAQueryResult{}, err
 	}
 	params.Set("format", "tsv")
 
-	text, err := c.requestText(ctx, "search", params)
-	if err != nil {
-		return ENAQueryResult{}, err
-	}
-	records, err := parseTSVRecords(text)
-	if err != nil {
-		return ENAQueryResult{}, err
-	}
-	addSourceToRecords(records, SearchSourceENA)
-
-	return ENAQueryResult{
+	result := ENAQueryResult{
 		ResultType: resultType,
 		ENAResult:  enaResult,
 		Query:      strings.TrimSpace(opts.Query),
 		Fields:     resolvedFields,
-		Records:    records,
-	}, nil
+	}
+
+	sawHeader := false
+	err = c.requestStream(ctx, "search", params, func(body io.Reader) error {
+		return parseTSVRecordStream(body, func(header []string) error {
+			sawHeader = true
+			if len(header) > 0 {
+				result.Fields = append([]string(nil), header...)
+			}
+			if onHeader != nil {
+				return onHeader(result)
+			}
+			return nil
+		}, func(record Record) error {
+			record["source"] = string(SearchSourceENA)
+			if onRecord != nil {
+				return onRecord(record)
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return ENAQueryResult{}, err
+	}
+	if !sawHeader && onHeader != nil {
+		if err := onHeader(result); err != nil {
+			return ENAQueryResult{}, err
+		}
+	}
+	return result, nil
 }
 
 // CountENAQuery returns the number of ENA records matching a raw ENA Portal API
@@ -778,35 +813,68 @@ func (c *Client) requestJSON(ctx context.Context, path string, params url.Values
 }
 
 func parseTSVRecords(text string) ([]Record, error) {
-	reader := csv.NewReader(strings.NewReader(text))
-	reader.Comma = '\t'
-	reader.FieldsPerRecord = -1
-
-	rows, err := reader.ReadAll()
-	if err != nil {
-		return nil, fmt.Errorf("error parsing tsv from query: %w", err)
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-
-	header := rows[0]
-	records := make([]Record, 0, len(rows)-1)
-	for _, row := range rows[1:] {
-		record := Record{}
-		for i, key := range header {
-			if key == "" {
-				continue
-			}
-			var value any
-			if i < len(row) && row[i] != "" {
-				value = row[i]
-			}
-			record[key] = value
-		}
+	records := []Record{}
+	err := parseTSVRecordStream(strings.NewReader(text), nil, func(record Record) error {
 		records = append(records, record)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return records, nil
+}
+
+func parseTSVRecordStream(input io.Reader, onHeader func([]string) error, onRecord func(Record) error) error {
+	reader := csv.NewReader(input)
+	reader.Comma = '\t'
+	reader.FieldsPerRecord = -1
+	reader.LazyQuotes = true
+
+	header, err := reader.Read()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			if onHeader != nil {
+				return onHeader(nil)
+			}
+			return nil
+		}
+		return fmt.Errorf("error parsing tsv from query: %w", err)
+	}
+	if onHeader != nil {
+		if err := onHeader(header); err != nil {
+			return err
+		}
+	}
+
+	for {
+		row, err := reader.Read()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return fmt.Errorf("error parsing tsv from query: %w", err)
+		}
+		if onRecord != nil {
+			if err := onRecord(tsvRowRecord(header, row)); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func tsvRowRecord(header []string, row []string) Record {
+	record := Record{}
+	for i, key := range header {
+		if key == "" {
+			continue
+		}
+		var value any
+		if i < len(row) && row[i] != "" {
+			value = row[i]
+		}
+		record[key] = value
+	}
+	return record
 }
 
 func (c *Client) requestText(ctx context.Context, path string, params url.Values) (string, error) {
@@ -844,6 +912,14 @@ func (c *Client) request(ctx context.Context, path string, params url.Values) ([
 	return c.requestWithBase(ctx, baseURL, path, params, "ENA", &enaRequestLimiter, c.enaRateLimitInterval())
 }
 
+func (c *Client) requestStream(ctx context.Context, path string, params url.Values, handle func(io.Reader) error) error {
+	baseURL := BasePortalURL
+	if c != nil && c.BaseURL != "" {
+		baseURL = c.BaseURL
+	}
+	return c.requestStreamWithBase(ctx, baseURL, path, params, "ENA", &enaRequestLimiter, c.enaRateLimitInterval(), handle)
+}
+
 func (c *Client) requestWithBase(ctx context.Context, baseURL string, path string, params url.Values, serviceName string, limiter *requestRateLimiter, rateLimitInterval time.Duration) ([]byte, error) {
 	requestURL, err := requestURL(baseURL, path, params)
 	if err != nil {
@@ -876,6 +952,42 @@ func (c *Client) requestWithBase(ctx context.Context, baseURL string, path strin
 	}
 }
 
+func (c *Client) requestStreamWithBase(ctx context.Context, baseURL string, path string, params url.Values, serviceName string, limiter *requestRateLimiter, rateLimitInterval time.Duration, handle func(io.Reader) error) error {
+	requestURL, err := requestURL(baseURL, path, params)
+	if err != nil {
+		return err
+	}
+
+	maxRetries := c.maxRequestRetries()
+	for attempt := 0; ; attempt++ {
+		if limiter != nil {
+			if err := limiter.wait(ctx, rateLimitInterval); err != nil {
+				return fmt.Errorf("error waiting for %s rate limit: %w", serviceName, err)
+			}
+		}
+
+		err := c.requestStreamOnce(ctx, requestURL, handle)
+		if err == nil {
+			return nil
+		}
+		var streamErr *requestStreamConsumedError
+		if errors.As(err, &streamErr) {
+			return streamErr.err
+		}
+		if !isRetryableRequestError(err) || attempt >= maxRetries {
+			if attempt > 0 {
+				return fmt.Errorf("error requesting data after %d attempts: %w", attempt+1, err)
+			}
+			return err
+		}
+
+		delay := c.requestRetryDelay(attempt, err)
+		if err := sleepContext(ctx, delay); err != nil {
+			return fmt.Errorf("error waiting to retry request: %w", err)
+		}
+	}
+}
+
 func (c *Client) requestOnce(ctx context.Context, requestURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
@@ -904,6 +1016,40 @@ func (c *Client) requestOnce(ctx context.Context, requestURL string) ([]byte, er
 	return body, nil
 }
 
+func (c *Client) requestStreamOnce(ctx context.Context, requestURL string, handle func(io.Reader) error) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return fmt.Errorf("error requesting data from %s: %w", requestURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("error reading error response from %s: %w", requestURL, err)
+		}
+		return &requestStatusError{
+			statusCode: resp.StatusCode,
+			url:        requestURL,
+			body:       trimResponseBody(body),
+			retryAfter: resp.Header.Get("Retry-After"),
+		}
+	}
+
+	if handle == nil {
+		return nil
+	}
+	if err := handle(resp.Body); err != nil {
+		return &requestStreamConsumedError{err: err}
+	}
+	return nil
+}
+
 type requestStatusError struct {
 	statusCode int
 	url        string
@@ -913,6 +1059,18 @@ type requestStatusError struct {
 
 func (e *requestStatusError) Error() string {
 	return fmt.Sprintf("error requesting data: status=%d url=%s body=%s", e.statusCode, e.url, e.body)
+}
+
+type requestStreamConsumedError struct {
+	err error
+}
+
+func (e *requestStreamConsumedError) Error() string {
+	return e.err.Error()
+}
+
+func (e *requestStreamConsumedError) Unwrap() error {
+	return e.err
 }
 
 func isRetryableRequestError(err error) bool {

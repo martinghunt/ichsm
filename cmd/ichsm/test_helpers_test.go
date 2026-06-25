@@ -89,3 +89,51 @@ func captureStdout(t *testing.T, fn func() int) (int, string) {
 
 	return code, stdout.String()
 }
+
+func captureStdoutStderr(t *testing.T, fn func() int) (int, string, string) {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	stdoutRead, stdoutWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderrRead, stderrWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = stdoutWrite
+	os.Stderr = stderrWrite
+	defer func() {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+
+	code := fn()
+
+	if err := stdoutWrite.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := stderrWrite.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	if _, err := io.Copy(&stdout, stdoutRead); err != nil {
+		t.Fatal(err)
+	}
+	if err := stdoutRead.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	if _, err := io.Copy(&stderr, stderrRead); err != nil {
+		t.Fatal(err)
+	}
+	if err := stderrRead.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	return code, stdout.String(), stderr.String()
+}

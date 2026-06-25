@@ -156,9 +156,21 @@ Run an ENA field query for bacterial Illumina runs:
 ichsm query --result run --query 'tax_tree(2) AND instrument_platform=ILLUMINA' --columns sample_accession,run_accession,instrument_platform
 ```
 
+For broad ENA field queries, the default TSV output streams rows as they are
+received. Use `--verbose` for stderr progress and redirect stdout to keep the
+result file clean:
+```
+ichsm query --verbose --result run --query 'tax_tree(2)' --columns sample_accession,run_accession,instrument_platform > runs.tsv
+```
+
 Find bacterial samples that have both Illumina and Oxford Nanopore runs:
 ```
 ichsm match --result run --query 'tax_tree(2)' --group-by sample_accession --has 'instrument_platform=ILLUMINA' --has 'instrument_platform=OXFORD_NANOPORE'
+```
+
+Output the matching run records from those samples:
+```
+ichsm match --result run --query 'tax_tree(2)' --group-by sample_accession --has 'instrument_platform=ILLUMINA' --has 'instrument_platform=OXFORD_NANOPORE' --output records --columns sample_accession,run_accession,instrument_platform
 ```
 
 List supported values for an ENA controlled vocabulary field:

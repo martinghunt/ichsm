@@ -829,6 +829,59 @@ func TestQueryENATSV(t *testing.T) {
 	}
 }
 
+func TestStreamENATSV(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("result"); got != "read_run" {
+			t.Fatalf("result = %q, want read_run", got)
+		}
+		if got := query.Get("format"); got != "tsv" {
+			t.Fatalf("format = %q, want tsv", got)
+		}
+		_, _ = w.Write([]byte("sample_accession\trun_accession\tinstrument_platform\tdescription\nSAMEA1\tERR1\tILLUMINA\tcontains a bare \" quote\nSAMEA2\tERR2\t\t\n"))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	var header ENAQueryResult
+	var records []Record
+	result, err := client.StreamENATSV(context.Background(), ENAQueryOptions{
+		Result: "run",
+		Query:  "tax_tree(2)",
+		Fields: []string{"sample_accession", "run_accession", "instrument_platform", "description"},
+	}, func(result ENAQueryResult) error {
+		header = result
+		return nil
+	}, func(record Record) error {
+		records = append(records, record)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ResultType != AccessionTypeRun || result.ENAResult != "read_run" {
+		t.Fatalf("result = %q/%q, want run/read_run", result.ResultType, result.ENAResult)
+	}
+	if !reflect.DeepEqual(header.Fields, []string{"sample_accession", "run_accession", "instrument_platform", "description"}) {
+		t.Fatalf("header fields = %#v", header.Fields)
+	}
+	if len(records) != 2 {
+		t.Fatalf("len(records) = %d, want 2", len(records))
+	}
+	if got := records[0]["source"]; got != string(SearchSourceENA) {
+		t.Fatalf("source = %q, want ena", got)
+	}
+	if got := records[0]["description"]; got != `contains a bare " quote` {
+		t.Fatalf("description = %q", got)
+	}
+	if got := records[1]["instrument_platform"]; got != nil {
+		t.Fatalf("instrument_platform = %#v, want nil", got)
+	}
+}
+
 func TestGetControlledVocabulary(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/controlledVocab" {

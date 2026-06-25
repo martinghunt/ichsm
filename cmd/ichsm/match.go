@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/martinghunt/ichsm"
 	"github.com/spf13/cobra"
@@ -16,25 +17,32 @@ const (
 	matchOutputGroups  = "groups"
 	matchOutputRecords = "records"
 
+	matchRecordScopeMatching = "matching"
+	matchRecordScopeAll      = "all"
+
 	matchStrategyAuto  = "auto"
 	matchStrategyLocal = "local"
 
 	matchGroupBatchSize           = 100
 	matchAutoENARequestsPerSecond = 5
+	matchRecordProgressEvery      = 100000
+	matchBatchProgressEvery       = 100
 )
 
 type matchOptions struct {
-	result   string
-	query    string
-	groupBy  string
-	has      []string
-	columns  string
-	output   string
-	outfmt   string
-	strategy string
-	limit    int
-	offset   int
-	debug    bool
+	result      string
+	query       string
+	groupBy     string
+	has         []string
+	columns     string
+	output      string
+	recordScope string
+	outfmt      string
+	strategy    string
+	limit       int
+	offset      int
+	debug       bool
+	verbose     bool
 }
 
 type matchRequirement struct {
@@ -61,10 +69,11 @@ type matchGroupJSON struct {
 
 func newMatchCommand() *cobra.Command {
 	opts := matchOptions{
-		columns:  "DEFAULT",
-		output:   matchOutputGroups,
-		outfmt:   outputFormatTSV,
-		strategy: matchStrategyAuto,
+		columns:     "DEFAULT",
+		output:      matchOutputGroups,
+		recordScope: matchRecordScopeMatching,
+		outfmt:      outputFormatTSV,
+		strategy:    matchStrategyAuto,
 	}
 	cmd := &cobra.Command{
 		Use:   "match",
@@ -77,6 +86,7 @@ func newMatchCommand() *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.BoolVar(&opts.debug, "debug", false, "More verbose logging")
+	flags.BoolVar(&opts.verbose, "verbose", false, "Print match progress to stderr")
 	flags.StringVarP(&opts.result, "result", "r", "", "ENA result type to query, such as sample or read_run")
 	flags.StringVarP(&opts.query, "query", "q", "", "ENA Portal API base query string, such as tax_tree(2)")
 	flags.StringVar(&opts.groupBy, "group-by", "", "Field used to group records, such as sample_accession")
@@ -84,6 +94,7 @@ func newMatchCommand() *cobra.Command {
 	flags.StringVarP(&opts.columns, "columns", "c", opts.columns, "Record columns for --output records, comma-separated, or SMALL, DEFAULT, BIG, ALL")
 	flags.StringVar(&opts.columns, "fields", opts.columns, "Record columns for --output records, comma-separated, or SMALL, DEFAULT, BIG, ALL")
 	flags.StringVar(&opts.output, "output", opts.output, "Output mode: groups or records")
+	flags.StringVar(&opts.recordScope, "record-scope", opts.recordScope, "Records to write with --output records: matching or all")
 	flags.StringVar(&opts.strategy, "strategy", opts.strategy, "Matching strategy: auto or local")
 	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, tsv, ttable, or ttsv")
 	flags.IntVar(&opts.limit, "limit", 0, "Maximum number of ENA records to fetch before grouping with --strategy local; 0 means no explicit limit")
@@ -100,6 +111,12 @@ func executeMatch(cmd *cobra.Command, opts matchOptions) error {
 	if err != nil {
 		return err
 	}
+	recordScope, err := parseMatchRecordScope(opts.recordScope)
+	if err != nil {
+		return err
+	}
+	opts.output = output
+	opts.recordScope = recordScope
 	strategy, err := parseMatchStrategy(opts.strategy)
 	if err != nil {
 		return err
@@ -155,9 +172,23 @@ func executeMatch(cmd *cobra.Command, opts matchOptions) error {
 	case matchOutputGroups:
 		return writeMatchGroups(cmd.OutOrStdout(), groupBy, groups, requirements, outfmt)
 	case matchOutputRecords:
+		if recordScope == matchRecordScopeMatching {
+			groups = matchingRecordGroups(groups, requirements)
+		}
 		return writeMatchRecords(cmd.OutOrStdout(), groups, outputFields, outfmt)
 	default:
 		return fmt.Errorf("unsupported match output %q", output)
+	}
+}
+
+func parseMatchRecordScope(recordScope string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(recordScope)) {
+	case "", matchRecordScopeMatching:
+		return matchRecordScopeMatching, nil
+	case matchRecordScopeAll:
+		return matchRecordScopeAll, nil
+	default:
+		return "", fmt.Errorf("unsupported --record-scope %q; expected matching or all", recordScope)
 	}
 }
 
@@ -198,6 +229,13 @@ func localMatchingGroups(ctx context.Context, client *ichsm.Client, opts matchOp
 }
 
 func autoMatchingGroups(ctx context.Context, client *ichsm.Client, opts matchOptions, groupBy string, requirements []matchRequirement, queryFields []string, errOut io.Writer) ([]matchGroup, error) {
+	progress := matchProgress{
+		enabled:           opts.verbose,
+		errOut:            errOut,
+		requestsPerSecond: matchENARequestsPerSecond(client),
+	}
+	progress.printf("counting %d match requirements\n", len(requirements))
+
 	seeds, err := countMatchSeeds(ctx, client, opts, requirements)
 	if err != nil {
 		return nil, err
@@ -216,6 +254,10 @@ func autoMatchingGroups(ctx context.Context, client *ichsm.Client, opts matchOpt
 			fmt.Fprintf(errOut, "seed count %d for %s\n", seed.count, seed.query)
 		}
 	}
+	for i, seed := range seeds {
+		progress.printf("seed %d count: %d records for --has %q\n", i+1, seed.count, seed.requirement.raw)
+		progress.printf("seed %d query: %s\n", i+1, seed.query)
+	}
 
 	var candidates map[string]bool
 	for i, seed := range seeds {
@@ -227,7 +269,8 @@ func autoMatchingGroups(ctx context.Context, client *ichsm.Client, opts matchOpt
 			}
 		}
 
-		seedGroups, err := fetchMatchGroupKeys(ctx, client, opts.result, seed.query, groupBy, filterValues)
+		label := matchSeedProgressLabel(i, seed)
+		seedGroups, err := fetchMatchGroupKeys(ctx, client, opts.result, seed.query, groupBy, filterValues, &progress, label)
 		if err != nil {
 			return nil, err
 		}
@@ -236,22 +279,99 @@ func autoMatchingGroups(ctx context.Context, client *ichsm.Client, opts matchOpt
 		} else {
 			candidates = intersectStringSets(candidates, seedGroups)
 		}
+		progress.printf("%s candidates: %d %s groups\n", label, len(candidates), groupBy)
 		if len(candidates) == 0 {
 			return nil, nil
 		}
 	}
 
-	records, err := fetchMatchGroupRecords(ctx, client, opts.result, opts.query, groupBy, candidates, queryFields)
+	finalQuery := finalMatchRecordQuery(opts.query, requirements, opts.output, opts.recordScope)
+	progress.printf("final records query: %s\n", strings.TrimSpace(finalQuery))
+	records, err := fetchMatchGroupRecords(ctx, client, opts.result, finalQuery, groupBy, candidates, queryFields, &progress)
 	if err != nil {
 		return nil, err
 	}
+	progress.printf("fetched %d final records for %d candidate groups\n", len(records), len(candidates))
 	return matchingGroups(records, groupBy, requirements), nil
+}
+
+type matchProgress struct {
+	enabled           bool
+	errOut            io.Writer
+	requestsPerSecond int
+}
+
+func (p *matchProgress) printf(format string, args ...any) {
+	if p == nil || !p.enabled {
+		return
+	}
+	out := p.errOut
+	if out == nil {
+		out = io.Discard
+	}
+	fmt.Fprintf(out, format, args...)
+}
+
+func (p *matchProgress) requestEstimate(batchCount int) string {
+	if p == nil || p.requestsPerSecond <= 0 || batchCount <= 0 {
+		return ""
+	}
+	duration := time.Duration(batchCount) * time.Second / time.Duration(p.requestsPerSecond)
+	if duration <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("; minimum time %s at %d req/s", formatDurationEstimate(duration), p.requestsPerSecond)
+}
+
+func (p *matchProgress) remainingRequestEstimate(remainingRequests int) string {
+	if p == nil || p.requestsPerSecond <= 0 || remainingRequests <= 0 {
+		return ""
+	}
+	duration := time.Duration(remainingRequests) * time.Second / time.Duration(p.requestsPerSecond)
+	if duration <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("; minimum time remaining %s", formatDurationEstimate(duration))
+}
+
+func matchENARequestsPerSecond(client *ichsm.Client) int {
+	if client != nil && client.ENARequestsPerSecond > 0 {
+		return client.ENARequestsPerSecond
+	}
+	if client != nil && client.ENARequestsPerSecond < 0 {
+		return 0
+	}
+	return matchAutoENARequestsPerSecond
+}
+
+func formatDurationEstimate(duration time.Duration) string {
+	if duration < time.Minute {
+		seconds := int(duration.Round(time.Second) / time.Second)
+		if seconds < 1 {
+			seconds = 1
+		}
+		return fmt.Sprintf("%ds", seconds)
+	}
+	duration = duration.Round(time.Second)
+	minutes := int(duration / time.Minute)
+	seconds := int((duration % time.Minute) / time.Second)
+	if seconds == 0 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	return fmt.Sprintf("%dm%02ds", minutes, seconds)
 }
 
 type matchSeed struct {
 	requirement matchRequirement
 	query       string
 	count       int
+}
+
+func matchSeedProgressLabel(index int, seed matchSeed) string {
+	if strings.TrimSpace(seed.requirement.raw) == "" {
+		return fmt.Sprintf("requirement %d", index+1)
+	}
+	return fmt.Sprintf("requirement %d --has %q", index+1, seed.requirement.raw)
 }
 
 func countMatchSeeds(ctx context.Context, client *ichsm.Client, opts matchOptions, requirements []matchRequirement) ([]matchSeed, error) {
@@ -270,32 +390,56 @@ func countMatchSeeds(ctx context.Context, client *ichsm.Client, opts matchOption
 	return seeds, nil
 }
 
-func fetchMatchGroupKeys(ctx context.Context, client *ichsm.Client, result string, query string, groupBy string, filterValues []string) (map[string]bool, error) {
+func finalMatchRecordQuery(baseQuery string, requirements []matchRequirement, output string, recordScope string) string {
+	if output != matchOutputRecords || recordScope != matchRecordScopeMatching {
+		return baseQuery
+	}
+
+	queries := make([]string, 0, len(requirements))
+	for _, requirement := range requirements {
+		queries = append(queries, requirement.enaQuery())
+	}
+	return andENAQueries(baseQuery, orENAQueries(queries...))
+}
+
+func fetchMatchGroupKeys(ctx context.Context, client *ichsm.Client, result string, query string, groupBy string, filterValues []string, progress *matchProgress, label string) (map[string]bool, error) {
 	groups := map[string]bool{}
 	batches := matchGroupBatches(filterValues)
-	for _, batch := range batches {
+	totalRecords := 0
+	nextRecordProgress := matchRecordProgressEvery
+	progress.printf("%s: fetching %d batch(es)%s for query: %s\n", label, len(batches), progress.requestEstimate(len(batches)), query)
+	for batchIndex, batch := range batches {
 		batchQuery := query
 		if len(batch) > 0 {
 			batchQuery = andENAQueries(batchQuery, groupFilterQuery(groupBy, batch))
 		}
-		result, err := client.QueryENATSV(ctx, ichsm.ENAQueryOptions{
+		_, err := client.StreamENATSV(ctx, ichsm.ENAQueryOptions{
 			Result: result,
 			Query:  batchQuery,
 			Fields: []string{groupBy},
+		}, nil, func(record ichsm.Record) error {
+			totalRecords++
+			if progress != nil && totalRecords >= nextRecordProgress {
+				progress.printf("%s: downloaded %d records\n", label, totalRecords)
+				nextRecordProgress += matchRecordProgressEvery
+			}
+			for _, groupKey := range recordValues(record, groupBy) {
+				groups[groupKey] = true
+			}
+			return nil
 		})
 		if err != nil {
 			return nil, err
 		}
-		for _, record := range result.Records {
-			for _, groupKey := range recordValues(record, groupBy) {
-				groups[groupKey] = true
-			}
+		if progress != nil && len(batches) > 1 && (batchIndex+1)%matchBatchProgressEvery == 0 {
+			progress.printf("%s: checked %d/%d batches; %d groups seen%s\n", label, batchIndex+1, len(batches), len(groups), progress.remainingRequestEstimate(len(batches)-batchIndex-1))
 		}
 	}
+	progress.printf("%s: downloaded %d records; saw %d groups\n", label, totalRecords, len(groups))
 	return groups, nil
 }
 
-func fetchMatchGroupRecords(ctx context.Context, client *ichsm.Client, result string, baseQuery string, groupBy string, groups map[string]bool, fields []string) ([]ichsm.Record, error) {
+func fetchMatchGroupRecords(ctx context.Context, client *ichsm.Client, result string, baseQuery string, groupBy string, groups map[string]bool, fields []string, progress *matchProgress) ([]ichsm.Record, error) {
 	groupKeys := sortedMapKeys(groups)
 	if len(groupKeys) == 0 {
 		return nil, nil
@@ -303,27 +447,40 @@ func fetchMatchGroupRecords(ctx context.Context, client *ichsm.Client, result st
 
 	var records []ichsm.Record
 	seenRecords := map[string]bool{}
-	for _, batch := range matchGroupBatches(groupKeys) {
+	batches := matchGroupBatches(groupKeys)
+	totalRecords := 0
+	nextRecordProgress := matchRecordProgressEvery
+	progress.printf("final records: fetching %d batch(es)%s\n", len(batches), progress.requestEstimate(len(batches)))
+	for batchIndex, batch := range batches {
 		query := andENAQueries(baseQuery, groupFilterQuery(groupBy, batch))
-		result, err := client.QueryENATSV(ctx, ichsm.ENAQueryOptions{
+		_, err := client.StreamENATSV(ctx, ichsm.ENAQueryOptions{
 			Result: result,
 			Query:  query,
 			Fields: fields,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, record := range result.Records {
+		}, nil, func(record ichsm.Record) error {
+			totalRecords++
+			if progress != nil && totalRecords >= nextRecordProgress {
+				progress.printf("final records: downloaded %d records\n", totalRecords)
+				nextRecordProgress += matchRecordProgressEvery
+			}
 			if recordHasAnyGroup(record, groupBy, groups) {
 				recordKey := recordIdentity(record)
 				if seenRecords[recordKey] {
-					continue
+					return nil
 				}
 				seenRecords[recordKey] = true
 				records = append(records, record)
 			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		if progress != nil && len(batches) > 1 && (batchIndex+1)%matchBatchProgressEvery == 0 {
+			progress.printf("final records: checked %d/%d batches; kept %d records%s\n", batchIndex+1, len(batches), len(records), progress.remainingRequestEstimate(len(batches)-batchIndex-1))
 		}
 	}
+	progress.printf("final records: downloaded %d records; kept %d records\n", totalRecords, len(records))
 	return records, nil
 }
 
@@ -458,6 +615,31 @@ func matchingGroups(records []ichsm.Record, groupBy string, requirements []match
 		}
 	}
 	return groups
+}
+
+func matchingRecordGroups(groups []matchGroup, requirements []matchRequirement) []matchGroup {
+	filtered := make([]matchGroup, 0, len(groups))
+	for _, group := range groups {
+		records := make([]ichsm.Record, 0, len(group.records))
+		for _, record := range group.records {
+			if recordMatchesAnyRequirement(record, requirements) {
+				records = append(records, record)
+			}
+		}
+		if len(records) > 0 {
+			filtered = append(filtered, matchGroup{key: group.key, records: records})
+		}
+	}
+	return filtered
+}
+
+func recordMatchesAnyRequirement(record ichsm.Record, requirements []matchRequirement) bool {
+	for _, requirement := range requirements {
+		if requirement.matches(record) {
+			return true
+		}
+	}
+	return false
 }
 
 func groupMatches(records []ichsm.Record, requirements []matchRequirement) bool {
