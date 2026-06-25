@@ -18,6 +18,9 @@ Use [`ichsm get_fields`](get-fields.md) to list queryable fields. For fields
 whose type is `controlled value`, use [`ichsm get_values`](get-values.md) to
 list allowed values.
 
+Use [`ichsm match`](match.md) when you need to group query results and require
+that each group contains rows matching multiple conditions.
+
 ## Usage
 
 ```
@@ -39,6 +42,23 @@ Required flags:
 - `--count`: only count matching ENA records.
 - `--limit`: maximum number of records to fetch.
 - `--offset`: offset for paging through ENA records.
+- `--verbose`: print download progress to stderr.
+
+## Large queries
+
+The default `--outfmt tsv` path streams ENA TSV rows as they are received, so it
+is the safest choice for broad queries such as `tax_tree(2)`. JSON, aligned
+table, and transposed output are buffered locally because those formats need the
+complete result set.
+
+Progress from `--verbose` is written to stderr. Redirect stdout when you want a
+clean result file:
+
+```
+ichsm query --verbose --result run --query 'tax_tree(2)' \
+  --columns sample_accession,run_accession,instrument_platform \
+  > runs.tsv
+```
 
 ## Examples
 

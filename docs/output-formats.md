@@ -16,6 +16,10 @@ record and want fields down the left-hand side.
 | `ttable` | Transposed space-aligned output. Field names are in the first column. | Reading one record in a terminal. |
 | `json` | Structured JSON. | Programs that need nested or typed data. |
 
+For `ichsm query`, plain `tsv` streams rows as they are received from ENA.
+JSON, aligned table, and transposed formats are buffered locally because they
+need the full result set.
+
 ## Command support
 
 | Command | Default | Supported formats |
@@ -23,6 +27,7 @@ record and want fields down the left-hand side.
 | `identify` | `table` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `search` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `query` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
+| `match` | `tsv` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `summary` | `ttable` | `json`, `table`, `tsv`, `ttable`, `ttsv` |
 | `reads` | `manifest` | `manifest`, `table`, `ttable`, `ttsv`, `urls`, `wget`, `curl`, `md5` |
 | `links` | `tree` | `tree`, `json`, `table`, `tsv` |

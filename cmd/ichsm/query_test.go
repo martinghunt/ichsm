@@ -21,10 +21,13 @@ func TestRunQueryWritesTSV(t *testing.T) {
 		if got := query.Get("fields"); got != "sample_accession,scientific_name,tax_id" {
 			t.Fatalf("fields = %q", got)
 		}
+		if got := query.Get("format"); got != "tsv" {
+			t.Fatalf("format = %q, want tsv", got)
+		}
 		if got := query.Get("limit"); got != "2" {
 			t.Fatalf("limit = %q, want 2", got)
 		}
-		_, _ = w.Write([]byte(`[{"sample_accession":"SAMEA1","scientific_name":"Escherichia coli","tax_id":"562"},{"sample_accession":"SAMEA2","scientific_name":"","tax_id":"573"}]`))
+		_, _ = w.Write([]byte("sample_accession\tscientific_name\ttax_id\nSAMEA1\tEscherichia coli\t562\nSAMEA2\t\t573\n"))
 	})
 
 	withTestClient(t, server)
@@ -39,6 +42,37 @@ func TestRunQueryWritesTSV(t *testing.T) {
 	const want = "sample_accession\tscientific_name\ttax_id\n" +
 		"SAMEA1\tEscherichia coli\t562\n" +
 		"SAMEA2\t.\t573\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestRunQueryStreamingTSVNormalizesEmbeddedNewline(t *testing.T) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if got := query.Get("format"); got != "tsv" {
+			t.Fatalf("format = %q, want tsv", got)
+		}
+		if got := query.Get("fields"); got != "sample_accession,description" {
+			t.Fatalf("fields = %q", got)
+		}
+		_, _ = w.Write([]byte("sample_accession\tdescription\nSAMEA1\t\"project line one\nproject line two\"\n"))
+	})
+
+	withTestClient(t, server)
+	code, stdout := captureStdout(t, func() int {
+		return run([]string{"query", "--result", "sample", "--query", "tax_tree(2)", "--columns", "sample_accession,description"})
+	})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	const want = "sample_accession\tdescription\n" +
+		"SAMEA1\tproject line one project line two\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
