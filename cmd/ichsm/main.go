@@ -550,6 +550,14 @@ func isNoResultsSearchError(err error) bool {
 	return errors.As(err, &noResultsErr)
 }
 
+func noResultsSearchAccessions(err error) []string {
+	var noResultsErr *noResultsSearchError
+	if !errors.As(err, &noResultsErr) {
+		return nil
+	}
+	return append([]string(nil), noResultsErr.accessions...)
+}
+
 func prepareAccessionSearches(accessions []string, level ichsm.AccessionType, errOut io.Writer) ([]accessionSearch, error) {
 	if len(accessions) == 0 {
 		return nil, errors.New("no accessions provided")

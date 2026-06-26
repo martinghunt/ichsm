@@ -26,7 +26,24 @@ file must all have the same inferred accession type.
   [Output formats](output-formats.md).
 - `--protocol`: `https` or `ftp`. Default is `https`.
 - `-o, --output-dir`: directory to use in printed output filenames.
+- `--on-no-results`: how to handle an accession that returns no read records.
+  Values are `skip`, `empty`, `error`, and `fail`. Default is `skip`.
 - `--debug`: more verbose logging.
+
+## No-result accessions
+
+Use `--on-no-results` to choose behavior when one accession in a batch has no
+read records:
+
+- `skip`: write a warning to stderr, omit that accession from output, continue
+  with the remaining accessions, and exit non-zero.
+- `empty`: for tabular outputs (`manifest`, `table`, `ttable`, `ttsv`), include
+  one placeholder row with empty fields, continue, and exit non-zero. For
+  `urls`, `wget`, `curl`, and `md5`, skip the accession because placeholder
+  commands or checksum lines would be invalid.
+- `error`: like `empty`, but tabular placeholder rows include `ichsm_status` and
+  `ichsm_error` diagnostic fields.
+- `fail`: stop immediately without writing partial output.
 
 ## Examples
 
@@ -64,6 +81,12 @@ Print MD5 checksum lines:
 
 ```
 ichsm reads -a SAMN05276490 --outfmt md5 --output-dir reads
+```
+
+Include no-result accessions as diagnostic manifest rows:
+
+```
+ichsm reads -f acc.txt --on-no-results error
 ```
 
 Use FTP URLs:

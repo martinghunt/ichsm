@@ -25,13 +25,15 @@ type readsOptions struct {
 	outfmt    string
 	protocol  string
 	outputDir string
+	noResults string
 	debug     bool
 }
 
 func newReadsCommand() *cobra.Command {
 	opts := readsOptions{
-		outfmt:   readsFormatManifest,
-		protocol: ichsm.ReadProtocolHTTPS,
+		outfmt:    readsFormatManifest,
+		protocol:  ichsm.ReadProtocolHTTPS,
+		noResults: noResultsModeSkip,
 	}
 
 	cmd := &cobra.Command{
@@ -51,6 +53,7 @@ func newReadsCommand() *cobra.Command {
 	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: manifest, table, ttable, ttsv, urls, wget, curl, or md5")
 	flags.StringVar(&opts.protocol, "protocol", opts.protocol, "Download URL protocol: https or ftp")
 	flags.StringVarP(&opts.outputDir, "output-dir", "o", "", "Directory to use in printed output filenames")
+	flags.StringVar(&opts.noResults, "on-no-results", opts.noResults, "How to handle accessions with no read records: skip, empty, error, or fail")
 	_ = flags.MarkHidden("acc_file")
 
 	return cmd
@@ -69,6 +72,10 @@ func executeReads(cmd *cobra.Command, opts readsOptions) error {
 	if err != nil {
 		return err
 	}
+	noResultsMode, err := parseNoResultsMode(opts.noResults)
+	if err != nil {
+		return err
+	}
 
 	accessions, err := accessionsFromInputs(opts.accession, opts.accFile)
 	if err != nil {
@@ -76,9 +83,10 @@ func executeReads(cmd *cobra.Command, opts readsOptions) error {
 	}
 
 	client := newClient()
-	results, err := searchAccessions(cmd.Context(), client, accessions, ichsm.ReadFileFields, ichsm.AccessionTypeRun, ichsm.SearchSourceENA, noResultsModeSkip, opts.debug, cmd.ErrOrStderr(), false)
-	if err != nil {
-		return err
+	searchNoResultsMode := readsSearchNoResultsMode(noResultsMode, outfmt)
+	results, searchErr := searchAccessions(cmd.Context(), client, accessions, ichsm.ReadFileFields, ichsm.AccessionTypeRun, ichsm.SearchSourceENA, searchNoResultsMode, opts.debug, cmd.ErrOrStderr(), false)
+	if searchErr != nil && !isNoResultsSearchError(searchErr) {
+		return searchErr
 	}
 
 	files, err := ichsm.ReadFilesFromSearchResults(results, ichsm.ReadFileOptions{
@@ -88,11 +96,18 @@ func executeReads(cmd *cobra.Command, opts readsOptions) error {
 	if err != nil {
 		return err
 	}
-	if len(files) == 0 {
+	noResultAccessions := noResultsSearchAccessions(searchErr)
+	if len(files) == 0 && len(noResultAccessions) == 0 {
 		return errors.New("no FASTQ files found")
 	}
 
-	return writeReads(cmd.OutOrStdout(), files, outfmt)
+	if len(files) > 0 || readsWritesNoResultsRows(noResultsMode, outfmt, len(noResultAccessions) > 0) {
+		if writeErr := writeReadsWithNoResults(cmd.OutOrStdout(), files, noResultAccessions, noResultsMode, outfmt); writeErr != nil {
+			return writeErr
+		}
+	}
+
+	return searchErr
 }
 
 func parseReadsOutfmt(outfmt string) (string, error) {
@@ -162,6 +177,26 @@ func writeReads(out io.Writer, files []ichsm.ReadFile, format string) error {
 	return nil
 }
 
+func writeReadsWithNoResults(out io.Writer, files []ichsm.ReadFile, noResultAccessions []string, noResultsMode string, format string) error {
+	if !readsWritesNoResultsRows(noResultsMode, format, len(noResultAccessions) > 0) {
+		return writeReads(out, files, format)
+	}
+
+	rows := readFilesRowsWithNoResults(files, noResultAccessions, noResultsMode == noResultsModeError)
+	switch format {
+	case readsFormatManifest:
+		return writeDelimitedRows(out, rows, "\t")
+	case readsFormatTable:
+		return writeRowsForOutputFormat(out, rows, outputFormatTable)
+	case outputFormatTTable:
+		return writeRowsForOutputFormat(out, rows, outputFormatTTable)
+	case outputFormatTTSV:
+		return writeRowsForOutputFormat(out, rows, outputFormatTTSV)
+	default:
+		return writeReads(out, files, format)
+	}
+}
+
 func writeReadsManifest(out io.Writer, files []ichsm.ReadFile) error {
 	return writeDelimitedRows(out, readFilesRows(files), "\t")
 }
@@ -179,6 +214,50 @@ func readFilesRows(files []ichsm.ReadFile) [][]string {
 		})
 	}
 	return rows
+}
+
+func readFilesRowsWithNoResults(files []ichsm.ReadFile, noResultAccessions []string, includeDiagnostics bool) [][]string {
+	rows := readFilesRows(files)
+	if includeDiagnostics {
+		rows[0] = append(rows[0], noResultsStatusField, noResultsErrorField)
+		for i := 1; i < len(rows); i++ {
+			rows[i] = append(rows[i], ".", ".")
+		}
+	}
+
+	for _, accession := range noResultAccessions {
+		row := []string{accession, ".", ".", ".", ".", "."}
+		if includeDiagnostics {
+			row = append(row, "no_results", "no results returned")
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+func readsSearchNoResultsMode(noResultsMode string, outfmt string) string {
+	if readsSupportsNoResultsRows(outfmt) {
+		return noResultsMode
+	}
+	switch noResultsMode {
+	case noResultsModeEmpty, noResultsModeError:
+		return noResultsModeSkip
+	default:
+		return noResultsMode
+	}
+}
+
+func readsWritesNoResultsRows(noResultsMode string, outfmt string, hasNoResults bool) bool {
+	return hasNoResults && readsSupportsNoResultsRows(outfmt) && (noResultsMode == noResultsModeEmpty || noResultsMode == noResultsModeError)
+}
+
+func readsSupportsNoResultsRows(outfmt string) bool {
+	switch outfmt {
+	case readsFormatManifest, readsFormatTable, outputFormatTTable, outputFormatTTSV:
+		return true
+	default:
+		return false
+	}
 }
 
 func shellQuote(value string) string {
