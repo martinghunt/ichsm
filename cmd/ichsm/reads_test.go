@@ -181,12 +181,12 @@ func TestRunReadsEmptyModeWritesEmptyManifestRow(t *testing.T) {
 	}
 }
 
-func TestRunReadsErrorModeWritesDiagnosticManifestRow(t *testing.T) {
+func TestRunReadsReportModeWritesDiagnosticManifestRow(t *testing.T) {
 	server := withPathResponseServer(t, "/search", `[]`)
 
 	withTestClient(t, server)
 	code, stdout, stderr := captureStdoutStderr(t, func() int {
-		return run([]string{"reads", "-a", "SAMN15052188", "--on-no-results", "error"})
+		return run([]string{"reads", "-a", "SAMN15052188", "--on-no-results", "report"})
 	})
 
 	if code == 0 {
@@ -197,7 +197,7 @@ func TestRunReadsErrorModeWritesDiagnosticManifestRow(t *testing.T) {
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
-	if !strings.Contains(stderr, "warning: no results returned for accession SAMN15052188; writing error record") {
+	if !strings.Contains(stderr, "warning: no results returned for accession SAMN15052188; writing report record") {
 		t.Fatalf("stderr = %q, want no-results warning", stderr)
 	}
 	if !strings.Contains(stderr, "Error: no results returned for accession SAMN15052188") {

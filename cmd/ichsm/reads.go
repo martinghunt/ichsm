@@ -53,7 +53,7 @@ func newReadsCommand() *cobra.Command {
 	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: manifest, table, ttable, ttsv, urls, wget, curl, or md5")
 	flags.StringVar(&opts.protocol, "protocol", opts.protocol, "Download URL protocol: https or ftp")
 	flags.StringVarP(&opts.outputDir, "output-dir", "o", "", "Directory to use in printed output filenames")
-	flags.StringVar(&opts.noResults, "on-no-results", opts.noResults, "How to handle accessions with no read records: skip, empty, error, or fail")
+	flags.StringVar(&opts.noResults, "on-no-results", opts.noResults, "How to handle accessions with no read records: skip, empty, report, or fail")
 	_ = flags.MarkHidden("acc_file")
 
 	return cmd
@@ -182,7 +182,7 @@ func writeReadsWithNoResults(out io.Writer, files []ichsm.ReadFile, noResultAcce
 		return writeReads(out, files, format)
 	}
 
-	rows := readFilesRowsWithNoResults(files, noResultAccessions, noResultsMode == noResultsModeError)
+	rows := readFilesRowsWithNoResults(files, noResultAccessions, noResultsMode == noResultsModeReport)
 	switch format {
 	case readsFormatManifest:
 		return writeDelimitedRows(out, rows, "\t")
@@ -240,7 +240,7 @@ func readsSearchNoResultsMode(noResultsMode string, outfmt string) string {
 		return noResultsMode
 	}
 	switch noResultsMode {
-	case noResultsModeEmpty, noResultsModeError:
+	case noResultsModeEmpty, noResultsModeReport:
 		return noResultsModeSkip
 	default:
 		return noResultsMode
@@ -248,7 +248,7 @@ func readsSearchNoResultsMode(noResultsMode string, outfmt string) string {
 }
 
 func readsWritesNoResultsRows(noResultsMode string, outfmt string, hasNoResults bool) bool {
-	return hasNoResults && readsSupportsNoResultsRows(outfmt) && (noResultsMode == noResultsModeEmpty || noResultsMode == noResultsModeError)
+	return hasNoResults && readsSupportsNoResultsRows(outfmt) && (noResultsMode == noResultsModeEmpty || noResultsMode == noResultsModeReport)
 }
 
 func readsSupportsNoResultsRows(outfmt string) bool {

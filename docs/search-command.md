@@ -30,7 +30,7 @@ file must all have the same inferred accession type.
 - `--fields`: alias for `--columns`.
 - `--outfmt`: output format. See [Output formats](output-formats.md).
 - `--on-no-results`: how to handle an accession that returns no records. Values
-  are `skip`, `empty`, `error`, and `fail`. Default is `skip`.
+  are `skip`, `empty`, `report`, and `fail`. Default is `skip`.
 - `--count`: only count matching ENA records.
 - `--api-key`, `--email`: NCBI settings. These default to `NCBI_API_KEY` and
   `NCBI_EMAIL`.
@@ -47,7 +47,7 @@ Use `--on-no-results` to choose batch behavior:
   with the remaining accessions, and exit non-zero.
 - `empty`: include one output record for that accession with requested fields
   empty, continue, and exit non-zero.
-- `error`: include one output record for that accession with requested fields
+- `report`: include one output record for that accession with requested fields
   empty plus `ichsm_status` and `ichsm_error` diagnostic fields, continue, and
   exit non-zero.
 - `fail`: stop immediately without writing partial output.
@@ -69,7 +69,7 @@ ichsm search -f acc.txt
 Include no-result accessions as diagnostic rows:
 
 ```
-ichsm search -f acc.txt --on-no-results error
+ichsm search -f acc.txt --on-no-results report
 ```
 
 Get JSON output:

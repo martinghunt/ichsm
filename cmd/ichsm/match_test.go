@@ -468,7 +468,7 @@ func TestRunMatchNoResultsEmptyModeWritesPlaceholderGroup(t *testing.T) {
 	}
 }
 
-func TestRunMatchNoResultsErrorModeWritesDiagnosticRecord(t *testing.T) {
+func TestRunMatchNoResultsReportModeWritesDiagnosticRecord(t *testing.T) {
 	server := withPathResponseServer(t, "/search", `[]`)
 
 	withTestClient(t, server)
@@ -483,7 +483,7 @@ func TestRunMatchNoResultsErrorModeWritesDiagnosticRecord(t *testing.T) {
 			"--columns", "sample_accession,run_accession",
 			"--strategy", "local",
 			"--outfmt", "json",
-			"--on-no-results", "error",
+			"--on-no-results", "report",
 		})
 	})
 
@@ -506,7 +506,7 @@ func TestRunMatchNoResultsErrorModeWritesDiagnosticRecord(t *testing.T) {
 	if gotError, _ := got[0]["ichsm_error"].(string); gotError != "no matching groups returned" {
 		t.Fatalf("ichsm_error = %q, want no matching groups returned", gotError)
 	}
-	if !strings.Contains(stderr, "warning: no matching groups returned; writing error record") {
+	if !strings.Contains(stderr, "warning: no matching groups returned; writing report record") {
 		t.Fatalf("stderr = %q, want no-results warning", stderr)
 	}
 	if !strings.Contains(stderr, "Error: no matching groups returned") {

@@ -99,7 +99,7 @@ func newMatchCommand() *cobra.Command {
 	flags.StringVar(&opts.recordScope, "record-scope", opts.recordScope, "Records to write with --output records: matching or all")
 	flags.StringVar(&opts.strategy, "strategy", opts.strategy, "Matching strategy: auto or local")
 	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, tsv, ttable, or ttsv")
-	flags.StringVar(&opts.noResults, "on-no-results", opts.noResults, "How to handle no matching groups: skip, empty, error, or fail")
+	flags.StringVar(&opts.noResults, "on-no-results", opts.noResults, "How to handle no matching groups: skip, empty, report, or fail")
 	flags.IntVar(&opts.limit, "limit", 0, "Maximum number of ENA records to fetch before grouping with --strategy local; 0 means no explicit limit")
 	flags.IntVar(&opts.offset, "offset", 0, "ENA result offset for paging with --strategy local")
 	return cmd
@@ -791,8 +791,8 @@ func writeNoMatchResults(out io.Writer, errOut io.Writer, groupBy string, requir
 	case noResultsModeEmpty:
 		fmt.Fprintf(errOut, "warning: %s; writing empty record\n", matchNoResultsMessage())
 		err = writeNoMatchPlaceholder(out, groupBy, requirements, outputFields, output, outfmt, false)
-	case noResultsModeError:
-		fmt.Fprintf(errOut, "warning: %s; writing error record\n", matchNoResultsMessage())
+	case noResultsModeReport:
+		fmt.Fprintf(errOut, "warning: %s; writing report record\n", matchNoResultsMessage())
 		err = writeNoMatchPlaceholder(out, groupBy, requirements, outputFields, output, outfmt, true)
 	default:
 		return fmt.Errorf("unsupported no-results mode %q", noResultsMode)

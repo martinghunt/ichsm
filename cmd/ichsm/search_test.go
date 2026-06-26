@@ -236,12 +236,12 @@ func TestRunSearchEmptyModeWritesEmptyRecord(t *testing.T) {
 	}
 }
 
-func TestRunSearchErrorModeWritesDiagnosticRecord(t *testing.T) {
+func TestRunSearchReportModeWritesDiagnosticRecord(t *testing.T) {
 	server := withPathResponseServer(t, "/search", `[]`)
 
 	withTestClient(t, server)
 	code, stdout, stderr := captureStdoutStderr(t, func() int {
-		return run([]string{"search", "-a", "SAMN15052188", "--columns", "sample_accession,study_accession", "--outfmt", "json", "--on-no-results", "error"})
+		return run([]string{"search", "-a", "SAMN15052188", "--columns", "sample_accession,study_accession", "--outfmt", "json", "--on-no-results", "report"})
 	})
 
 	if code == 0 {
@@ -264,7 +264,7 @@ func TestRunSearchErrorModeWritesDiagnosticRecord(t *testing.T) {
 	if gotError, _ := records[0]["ichsm_error"].(string); gotError != "no results returned" {
 		t.Fatalf("ichsm_error = %q, want no results returned", gotError)
 	}
-	if !strings.Contains(stderr, "warning: no results returned for accession SAMN15052188; writing error record") {
+	if !strings.Contains(stderr, "warning: no results returned for accession SAMN15052188; writing report record") {
 		t.Fatalf("stderr = %q, want no-results warning", stderr)
 	}
 	if !strings.Contains(stderr, "Error: no results returned for accession SAMN15052188") {

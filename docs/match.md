@@ -58,7 +58,7 @@ AND group has at least one PacBio or Oxford Nanopore row
 - `--strategy auto|local`: choose the matching strategy. Default is `auto`.
 - `--outfmt`: output format. See [Output formats](output-formats.md).
 - `--on-no-results`: how to handle a query that returns no matching groups.
-  Values are `skip`, `empty`, `error`, and `fail`. Default is `skip`.
+  Values are `skip`, `empty`, `report`, and `fail`. Default is `skip`.
 - `--limit`: maximum number of ENA records to fetch before grouping with
   `--strategy local`.
 - `--offset`: offset for paging through ENA records with `--strategy local`.
@@ -73,7 +73,7 @@ requirements:
   continue command cleanup, and exit non-zero.
 - `empty`: include one placeholder output row or record with empty fields and
   exit non-zero.
-- `error`: include one placeholder output row or record with empty fields plus
+- `report`: include one placeholder output row or record with empty fields plus
   `ichsm_status` and `ichsm_error` diagnostic fields and exit non-zero.
 - `fail`: stop without writing output and exit non-zero.
 

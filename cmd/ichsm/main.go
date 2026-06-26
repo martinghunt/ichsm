@@ -28,10 +28,10 @@ const (
 const largeJSONRecordWarningThreshold = 1000
 
 const (
-	noResultsModeSkip  = "skip"
-	noResultsModeEmpty = "empty"
-	noResultsModeError = "error"
-	noResultsModeFail  = "fail"
+	noResultsModeSkip   = "skip"
+	noResultsModeEmpty  = "empty"
+	noResultsModeReport = "report"
+	noResultsModeFail   = "fail"
 
 	noResultsStatusField = "ichsm_status"
 	noResultsErrorField  = "ichsm_error"
@@ -131,7 +131,7 @@ func newSearchCommand() *cobra.Command {
 	flags.StringVar(&opts.apiKey, "api-key", "", "NCBI API key; defaults to NCBI_API_KEY")
 	flags.StringVar(&opts.email, "email", "", "Email address sent to NCBI; defaults to NCBI_EMAIL")
 	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, tsv, ttable, or ttsv")
-	flags.StringVar(&opts.noResults, "on-no-results", opts.noResults, "How to handle accessions with no records: skip, empty, error, or fail")
+	flags.StringVar(&opts.noResults, "on-no-results", opts.noResults, "How to handle accessions with no records: skip, empty, report, or fail")
 	flags.BoolVar(&opts.count, "count", false, "Only count matching ENA records; do not fetch metadata")
 	_ = flags.MarkHidden("acc_file")
 
@@ -272,12 +272,12 @@ func parseNoResultsMode(mode string) (string, error) {
 		return noResultsModeSkip, nil
 	case noResultsModeEmpty:
 		return noResultsModeEmpty, nil
-	case noResultsModeError:
-		return noResultsModeError, nil
+	case noResultsModeReport:
+		return noResultsModeReport, nil
 	case noResultsModeFail:
 		return noResultsModeFail, nil
 	default:
-		return "", fmt.Errorf("unsupported --on-no-results %q; expected skip, empty, error, or fail", mode)
+		return "", fmt.Errorf("unsupported --on-no-results %q; expected skip, empty, report, or fail", mode)
 	}
 }
 
@@ -632,8 +632,8 @@ func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []st
 				continue
 			case noResultsModeEmpty:
 				fmt.Fprintf(errOut, "warning: no results returned for accession %s; writing empty record\n", accession.input)
-			case noResultsModeError:
-				fmt.Fprintf(errOut, "warning: no results returned for accession %s; writing error record\n", accession.input)
+			case noResultsModeReport:
+				fmt.Fprintf(errOut, "warning: no results returned for accession %s; writing report record\n", accession.input)
 			default:
 				return nil, fmt.Errorf("unsupported no-results mode %q", noResultsMode)
 			}
@@ -667,7 +667,7 @@ func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []st
 }
 
 func searchResultFields(fields []string, noResultsMode string) []string {
-	if noResultsMode != noResultsModeError {
+	if noResultsMode != noResultsModeReport {
 		return fields
 	}
 	out := append([]string(nil), fields...)
@@ -686,7 +686,7 @@ func noResultsRecord(fields []string, noResultsMode string) ichsm.Record {
 			record[field] = nil
 		}
 	}
-	if noResultsMode == noResultsModeError {
+	if noResultsMode == noResultsModeReport {
 		record[noResultsStatusField] = "no_results"
 		record[noResultsErrorField] = "no results returned"
 	}
