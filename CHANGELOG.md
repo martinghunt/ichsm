@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-26
+
 ### Added
 - Add `--on-no-results skip|empty|report|fail` to `ichsm search`, `ichsm reads`, and `ichsm match` to control how batch workflows handle accessions or match queries that return no records.
 
@@ -98,7 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release `v0.1.0`, before changelog tracking started in this file.
 
-[Unreleased]: https://github.com/martinghunt/ichsm/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/martinghunt/ichsm/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/martinghunt/ichsm/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/martinghunt/ichsm/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/martinghunt/ichsm/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/martinghunt/ichsm/compare/v0.3.0...v0.4.0
