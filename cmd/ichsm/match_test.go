@@ -362,7 +362,7 @@ func TestRunMatchAutoStopsWhenASeedCountIsZero(t *testing.T) {
 	})
 
 	withTestClient(t, server)
-	code, stdout := captureStdout(t, func() int {
+	code, stdout, stderr := captureStdoutStderr(t, func() int {
 		return run([]string{
 			"match",
 			"--result", "run",
@@ -372,8 +372,8 @@ func TestRunMatchAutoStopsWhenASeedCountIsZero(t *testing.T) {
 		})
 	})
 
-	if code != 0 {
-		t.Fatalf("exit code = %d, want 0", code)
+	if code == 0 {
+		t.Fatal("expected non-zero exit code")
 	}
 	if searched {
 		t.Fatal("unexpected search request")
@@ -381,6 +381,136 @@ func TestRunMatchAutoStopsWhenASeedCountIsZero(t *testing.T) {
 	const want = "sample_accession\trecord_count\tinstrument_platform\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+	if !strings.Contains(stderr, "warning: no matching groups returned; writing empty output") {
+		t.Fatalf("stderr = %q, want no-results warning", stderr)
+	}
+	if !strings.Contains(stderr, "Error: no matching groups returned") {
+		t.Fatalf("stderr = %q, want final no-results error", stderr)
+	}
+}
+
+func TestRunMatchNoResultsFailModeStopsWithoutOutput(t *testing.T) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/count":
+			_, _ = w.Write([]byte(`{"count":"0"}`))
+		case "/search":
+			t.Fatalf("did not expect search request")
+		default:
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+	})
+
+	withTestClient(t, server)
+	code, stdout, stderr := captureStdoutStderr(t, func() int {
+		return run([]string{
+			"match",
+			"--result", "run",
+			"--query", "tax_tree(2)",
+			"--group-by", "sample_accession",
+			"--has", "instrument_platform=ILLUMINA",
+			"--on-no-results", "fail",
+		})
+	})
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit code")
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want empty output in fail mode", stdout)
+	}
+	if strings.Contains(stderr, "warning:") {
+		t.Fatalf("stderr = %q, want no warning in fail mode", stderr)
+	}
+	if !strings.Contains(stderr, "Error: no matching groups returned") {
+		t.Fatalf("stderr = %q, want final no-results error", stderr)
+	}
+}
+
+func TestRunMatchNoResultsEmptyModeWritesPlaceholderGroup(t *testing.T) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/count":
+			_, _ = w.Write([]byte(`{"count":"0"}`))
+		case "/search":
+			t.Fatalf("did not expect search request")
+		default:
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+	})
+
+	withTestClient(t, server)
+	code, stdout, stderr := captureStdoutStderr(t, func() int {
+		return run([]string{
+			"match",
+			"--result", "run",
+			"--query", "tax_tree(2)",
+			"--group-by", "sample_accession",
+			"--has", "instrument_platform=ILLUMINA",
+			"--on-no-results", "empty",
+		})
+	})
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit code")
+	}
+	const want = "sample_accession\trecord_count\tinstrument_platform\n" +
+		".\t0\t.\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+	if !strings.Contains(stderr, "warning: no matching groups returned; writing empty record") {
+		t.Fatalf("stderr = %q, want no-results warning", stderr)
+	}
+	if !strings.Contains(stderr, "Error: no matching groups returned") {
+		t.Fatalf("stderr = %q, want final no-results error", stderr)
+	}
+}
+
+func TestRunMatchNoResultsErrorModeWritesDiagnosticRecord(t *testing.T) {
+	server := withPathResponseServer(t, "/search", `[]`)
+
+	withTestClient(t, server)
+	code, stdout, stderr := captureStdoutStderr(t, func() int {
+		return run([]string{
+			"match",
+			"--result", "run",
+			"--query", "tax_tree(2)",
+			"--group-by", "sample_accession",
+			"--has", "instrument_platform=ILLUMINA",
+			"--output", "records",
+			"--columns", "sample_accession,run_accession",
+			"--strategy", "local",
+			"--outfmt", "json",
+			"--on-no-results", "error",
+		})
+	})
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit code")
+	}
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("error parsing stdout JSON: %v\nstdout = %s", err, stdout)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1; stdout = %s", len(got), stdout)
+	}
+	if value, ok := got[0]["sample_accession"]; !ok || value != nil {
+		t.Fatalf("sample_accession = %#v, want nil", value)
+	}
+	if gotStatus, _ := got[0]["ichsm_status"].(string); gotStatus != "no_results" {
+		t.Fatalf("ichsm_status = %q, want no_results", gotStatus)
+	}
+	if gotError, _ := got[0]["ichsm_error"].(string); gotError != "no matching groups returned" {
+		t.Fatalf("ichsm_error = %q, want no matching groups returned", gotError)
+	}
+	if !strings.Contains(stderr, "warning: no matching groups returned; writing error record") {
+		t.Fatalf("stderr = %q, want no-results warning", stderr)
+	}
+	if !strings.Contains(stderr, "Error: no matching groups returned") {
+		t.Fatalf("stderr = %q, want final no-results error", stderr)
 	}
 }
 
