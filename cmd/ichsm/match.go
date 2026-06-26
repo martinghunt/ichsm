@@ -39,6 +39,7 @@ type matchOptions struct {
 	recordScope string
 	outfmt      string
 	strategy    string
+	noResults   string
 	limit       int
 	offset      int
 	debug       bool
@@ -74,6 +75,7 @@ func newMatchCommand() *cobra.Command {
 		recordScope: matchRecordScopeMatching,
 		outfmt:      outputFormatTSV,
 		strategy:    matchStrategyAuto,
+		noResults:   noResultsModeSkip,
 	}
 	cmd := &cobra.Command{
 		Use:   "match",
@@ -97,6 +99,7 @@ func newMatchCommand() *cobra.Command {
 	flags.StringVar(&opts.recordScope, "record-scope", opts.recordScope, "Records to write with --output records: matching or all")
 	flags.StringVar(&opts.strategy, "strategy", opts.strategy, "Matching strategy: auto or local")
 	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, tsv, ttable, or ttsv")
+	flags.StringVar(&opts.noResults, "on-no-results", opts.noResults, "How to handle no matching groups: skip, empty, report, or fail")
 	flags.IntVar(&opts.limit, "limit", 0, "Maximum number of ENA records to fetch before grouping with --strategy local; 0 means no explicit limit")
 	flags.IntVar(&opts.offset, "offset", 0, "ENA result offset for paging with --strategy local")
 	return cmd
@@ -123,6 +126,10 @@ func executeMatch(cmd *cobra.Command, opts matchOptions) error {
 	}
 	if strategy == matchStrategyAuto && (opts.limit > 0 || opts.offset > 0) {
 		return fmt.Errorf("--limit and --offset are supported only with --strategy local")
+	}
+	noResultsMode, err := parseNoResultsMode(opts.noResults)
+	if err != nil {
+		return err
 	}
 	groupBy := strings.TrimSpace(opts.groupBy)
 	if groupBy == "" {
@@ -168,17 +175,28 @@ func executeMatch(cmd *cobra.Command, opts matchOptions) error {
 	if err != nil {
 		return err
 	}
+	if output == matchOutputRecords {
+		if recordScope == matchRecordScopeMatching {
+			groups = matchingRecordGroups(groups, requirements)
+		}
+	}
+	if len(groups) == 0 {
+		return writeNoMatchResults(cmd.OutOrStdout(), cmd.ErrOrStderr(), groupBy, requirements, outputFields, output, outfmt, noResultsMode)
+	}
 	switch output {
 	case matchOutputGroups:
 		return writeMatchGroups(cmd.OutOrStdout(), groupBy, groups, requirements, outfmt)
 	case matchOutputRecords:
-		if recordScope == matchRecordScopeMatching {
-			groups = matchingRecordGroups(groups, requirements)
-		}
 		return writeMatchRecords(cmd.OutOrStdout(), groups, outputFields, outfmt)
 	default:
 		return fmt.Errorf("unsupported match output %q", output)
 	}
+}
+
+type noResultsMatchError struct{}
+
+func (e *noResultsMatchError) Error() string {
+	return matchNoResultsMessage()
 }
 
 func parseMatchRecordScope(recordScope string) (string, error) {
@@ -754,6 +772,130 @@ func recordIdentity(record ichsm.Record) string {
 		builder.WriteByte(';')
 	}
 	return builder.String()
+}
+
+func writeNoMatchResults(out io.Writer, errOut io.Writer, groupBy string, requirements []matchRequirement, outputFields []string, output string, outfmt string, noResultsMode string) error {
+	if noResultsMode == noResultsModeFail {
+		return &noResultsMatchError{}
+	}
+
+	if errOut == nil {
+		errOut = io.Discard
+	}
+
+	var err error
+	switch noResultsMode {
+	case noResultsModeSkip:
+		fmt.Fprintf(errOut, "warning: %s; writing empty output\n", matchNoResultsMessage())
+		err = writeNoMatchEmptyOutput(out, groupBy, requirements, outputFields, output, outfmt)
+	case noResultsModeEmpty:
+		fmt.Fprintf(errOut, "warning: %s; writing empty record\n", matchNoResultsMessage())
+		err = writeNoMatchPlaceholder(out, groupBy, requirements, outputFields, output, outfmt, false)
+	case noResultsModeReport:
+		fmt.Fprintf(errOut, "warning: %s; writing report record\n", matchNoResultsMessage())
+		err = writeNoMatchPlaceholder(out, groupBy, requirements, outputFields, output, outfmt, true)
+	default:
+		return fmt.Errorf("unsupported no-results mode %q", noResultsMode)
+	}
+	if err != nil {
+		return err
+	}
+	return &noResultsMatchError{}
+}
+
+func writeNoMatchEmptyOutput(out io.Writer, groupBy string, requirements []matchRequirement, outputFields []string, output string, outfmt string) error {
+	switch output {
+	case matchOutputGroups:
+		return writeMatchGroups(out, groupBy, nil, requirements, outfmt)
+	case matchOutputRecords:
+		if outfmt == outputFormatJSON {
+			return writeJSONValue(out, []ichsm.Record{})
+		}
+		return writeRowsForOutputFormat(out, matchRecordRows(nil, outputFields), outfmt)
+	default:
+		return fmt.Errorf("unsupported match output %q", output)
+	}
+}
+
+func writeNoMatchPlaceholder(out io.Writer, groupBy string, requirements []matchRequirement, outputFields []string, output string, outfmt string, includeDiagnostics bool) error {
+	switch output {
+	case matchOutputGroups:
+		return writeNoMatchGroupPlaceholder(out, groupBy, requirements, outfmt, includeDiagnostics)
+	case matchOutputRecords:
+		return writeNoMatchRecordPlaceholder(out, outputFields, outfmt, includeDiagnostics)
+	default:
+		return fmt.Errorf("unsupported match output %q", output)
+	}
+}
+
+func writeNoMatchGroupPlaceholder(out io.Writer, groupBy string, requirements []matchRequirement, outfmt string, includeDiagnostics bool) error {
+	valueFields := matchValueFields(requirements)
+	if !includeDiagnostics {
+		return writeMatchGroups(out, groupBy, []matchGroup{{key: "."}}, requirements, outfmt)
+	}
+
+	if outfmt == outputFormatJSON {
+		return writeJSONValue(out, []map[string]any{{
+			"group_by":           groupBy,
+			"group":              ".",
+			"record_count":       0,
+			noResultsStatusField: "no_results",
+			noResultsErrorField:  matchNoResultsMessage(),
+		}})
+	}
+
+	header := append([]string{groupBy, "record_count"}, valueFields...)
+	header = append(header, noResultsStatusField, noResultsErrorField)
+	row := []string{".", "0"}
+	for range valueFields {
+		row = append(row, ".")
+	}
+	row = append(row, "no_results", matchNoResultsMessage())
+	return writeRowsForOutputFormat(out, [][]string{header, row}, outfmt)
+}
+
+func writeNoMatchRecordPlaceholder(out io.Writer, outputFields []string, outfmt string, includeDiagnostics bool) error {
+	record := matchNoResultsRecord(outputFields, includeDiagnostics)
+	if outfmt == outputFormatJSON {
+		return writeJSONValue(out, []ichsm.Record{record})
+	}
+	return writeRowsForOutputFormat(out, matchRecordRows([]ichsm.Record{record}, matchNoResultsRecordFields(outputFields, includeDiagnostics)), outfmt)
+}
+
+func matchNoResultsRecordFields(outputFields []string, includeDiagnostics bool) []string {
+	if requestedAllFields(outputFields) {
+		if includeDiagnostics {
+			return []string{noResultsStatusField, noResultsErrorField}
+		}
+		return nil
+	}
+	out := append([]string(nil), outputFields...)
+	if includeDiagnostics {
+		out = appendStringIfMissing(out, noResultsStatusField)
+		out = appendStringIfMissing(out, noResultsErrorField)
+	}
+	return out
+}
+
+func matchNoResultsRecord(outputFields []string, includeDiagnostics bool) ichsm.Record {
+	record := ichsm.Record{}
+	if !requestedAllFields(outputFields) {
+		for _, field := range outputFields {
+			if strings.TrimSpace(field) == "" {
+				continue
+			}
+			record[field] = nil
+		}
+	}
+	if includeDiagnostics {
+		record[noResultsStatusField] = "no_results"
+		record[noResultsErrorField] = matchNoResultsMessage()
+	}
+	return record
+}
+
+func matchNoResultsMessage() string {
+	return "no matching groups returned"
 }
 
 func andENAQueries(parts ...string) string {
