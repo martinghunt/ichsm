@@ -76,7 +76,7 @@ func executeReads(cmd *cobra.Command, opts readsOptions) error {
 	}
 
 	client := newClient()
-	results, err := searchAccessions(cmd.Context(), client, accessions, ichsm.ReadFileFields, ichsm.AccessionTypeRun, ichsm.SearchSourceENA, opts.debug, cmd.ErrOrStderr(), false)
+	results, err := searchAccessions(cmd.Context(), client, accessions, ichsm.ReadFileFields, ichsm.AccessionTypeRun, ichsm.SearchSourceENA, noResultsModeSkip, opts.debug, cmd.ErrOrStderr(), false)
 	if err != nil {
 		return err
 	}

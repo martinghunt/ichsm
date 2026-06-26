@@ -27,6 +27,16 @@ const (
 
 const largeJSONRecordWarningThreshold = 1000
 
+const (
+	noResultsModeSkip  = "skip"
+	noResultsModeEmpty = "empty"
+	noResultsModeError = "error"
+	noResultsModeFail  = "fail"
+
+	noResultsStatusField = "ichsm_status"
+	noResultsErrorField  = "ichsm_error"
+)
+
 func main() {
 	log.SetPrefix("[ichsm] ")
 	log.SetFlags(0)
@@ -89,14 +99,16 @@ type searchOptions struct {
 	apiKey    string
 	email     string
 	outfmt    string
+	noResults string
 	count     bool
 	debug     bool
 }
 
 func newSearchCommand() *cobra.Command {
 	opts := searchOptions{
-		columns: "DEFAULT",
-		outfmt:  outputFormatTSV,
+		columns:   "DEFAULT",
+		outfmt:    outputFormatTSV,
+		noResults: noResultsModeSkip,
 	}
 	cmd := &cobra.Command{
 		Use:   "search",
@@ -119,6 +131,7 @@ func newSearchCommand() *cobra.Command {
 	flags.StringVar(&opts.apiKey, "api-key", "", "NCBI API key; defaults to NCBI_API_KEY")
 	flags.StringVar(&opts.email, "email", "", "Email address sent to NCBI; defaults to NCBI_EMAIL")
 	flags.StringVar(&opts.outfmt, "outfmt", opts.outfmt, "Output format: json, table, tsv, ttable, or ttsv")
+	flags.StringVar(&opts.noResults, "on-no-results", opts.noResults, "How to handle accessions with no records: skip, empty, error, or fail")
 	flags.BoolVar(&opts.count, "count", false, "Only count matching ENA records; do not fetch metadata")
 	_ = flags.MarkHidden("acc_file")
 
@@ -148,6 +161,10 @@ func executeSearch(cmd *cobra.Command, opts searchOptions) error {
 	if err != nil {
 		return err
 	}
+	noResultsMode, err := parseNoResultsMode(opts.noResults)
+	if err != nil {
+		return err
+	}
 
 	client := newNCBIConfiguredClient(opts.apiKey, opts.email)
 
@@ -159,7 +176,7 @@ func executeSearch(cmd *cobra.Command, opts searchOptions) error {
 		return writeCountResults(cmd.OutOrStdout(), counts, outfmt)
 	}
 
-	results, err := searchAccessions(cmd.Context(), client, accessions, fields, level, source, opts.debug, cmd.ErrOrStderr(), outfmt == outputFormatJSON)
+	results, err := searchAccessions(cmd.Context(), client, accessions, fields, level, source, noResultsMode, opts.debug, cmd.ErrOrStderr(), outfmt == outputFormatJSON)
 	if err != nil && !isNoResultsSearchError(err) {
 		return err
 	}
@@ -246,6 +263,21 @@ func parseSearchSource(source string) (ichsm.SearchSource, error) {
 		return ichsm.SearchSourceNCBI, nil
 	default:
 		return "", fmt.Errorf("unsupported --source %q; expected auto, ena, or ncbi", source)
+	}
+}
+
+func parseNoResultsMode(mode string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", noResultsModeSkip:
+		return noResultsModeSkip, nil
+	case noResultsModeEmpty:
+		return noResultsModeEmpty, nil
+	case noResultsModeError:
+		return noResultsModeError, nil
+	case noResultsModeFail:
+		return noResultsModeFail, nil
+	default:
+		return "", fmt.Errorf("unsupported --on-no-results %q; expected skip, empty, error, or fail", mode)
 	}
 }
 
@@ -553,7 +585,7 @@ func prepareAccessionSearches(accessions []string, level ichsm.AccessionType, er
 	return toSearch, nil
 }
 
-func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []string, fields []string, level ichsm.AccessionType, source ichsm.SearchSource, debug bool, errOut io.Writer, preflightLargeJSON bool) ([]ichsm.SearchResult, error) {
+func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []string, fields []string, level ichsm.AccessionType, source ichsm.SearchSource, noResultsMode string, debug bool, errOut io.Writer, preflightLargeJSON bool) ([]ichsm.SearchResult, error) {
 	toSearch, err := prepareAccessionSearches(accessions, level, errOut)
 	if err != nil {
 		return nil, err
@@ -581,9 +613,31 @@ func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []st
 		if err != nil {
 			return nil, fmt.Errorf("error getting data for accession %s: %w", accession.input, err)
 		}
+		outputFields := searchResultFields(newFields, noResultsMode)
 		if len(records) == 0 {
-			fmt.Fprintf(errOut, "warning: no results returned for accession %s; skipping\n", accession.input)
 			noResults = append(noResults, accession.input)
+			switch noResultsMode {
+			case noResultsModeFail:
+				return nil, fmt.Errorf("no results returned for accession %s", accession.input)
+			case noResultsModeSkip:
+				fmt.Fprintf(errOut, "warning: no results returned for accession %s; skipping\n", accession.input)
+				continue
+			case noResultsModeEmpty:
+				fmt.Fprintf(errOut, "warning: no results returned for accession %s; writing empty record\n", accession.input)
+			case noResultsModeError:
+				fmt.Fprintf(errOut, "warning: no results returned for accession %s; writing error record\n", accession.input)
+			default:
+				return nil, fmt.Errorf("unsupported no-results mode %q", noResultsMode)
+			}
+			results = append(results, ichsm.SearchResult{
+				InputAccession: accession.input,
+				FixedAccession: accession.fixed,
+				InputType:      accession.typ,
+				ResultType:     resultType,
+				Source:         resultSource,
+				Fields:         outputFields,
+				Records:        []ichsm.Record{noResultsRecord(newFields, noResultsMode)},
+			})
 			continue
 		}
 
@@ -593,7 +647,7 @@ func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []st
 			InputType:      accession.typ,
 			ResultType:     resultType,
 			Source:         resultSource,
-			Fields:         newFields,
+			Fields:         outputFields,
 			Records:        records,
 		})
 	}
@@ -602,6 +656,42 @@ func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []st
 		return results, &noResultsSearchError{accessions: noResults}
 	}
 	return results, nil
+}
+
+func searchResultFields(fields []string, noResultsMode string) []string {
+	if noResultsMode != noResultsModeError {
+		return fields
+	}
+	out := append([]string(nil), fields...)
+	out = appendStringIfMissing(out, noResultsStatusField)
+	out = appendStringIfMissing(out, noResultsErrorField)
+	return out
+}
+
+func noResultsRecord(fields []string, noResultsMode string) ichsm.Record {
+	record := ichsm.Record{}
+	if !requestedAllFields(fields) {
+		for _, field := range fields {
+			if strings.TrimSpace(field) == "" {
+				continue
+			}
+			record[field] = nil
+		}
+	}
+	if noResultsMode == noResultsModeError {
+		record[noResultsStatusField] = "no_results"
+		record[noResultsErrorField] = "no results returned"
+	}
+	return record
+}
+
+func appendStringIfMissing(values []string, value string) []string {
+	for _, candidate := range values {
+		if candidate == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func countAccessions(ctx context.Context, client *ichsm.Client, accessions []string, level ichsm.AccessionType, source ichsm.SearchSource, errOut io.Writer) ([]countResult, error) {
