@@ -90,7 +90,7 @@ func TestRunSearchFailsWhenNoRecordsReturned(t *testing.T) {
 	server := withPathResponseServer(t, "/search", `[]`)
 
 	withTestClient(t, server)
-	code, stdout := captureStdout(t, func() int {
+	code, stdout, stderr := captureStdoutStderr(t, func() int {
 		return run([]string{"search", "-a", "SAMN05276490"})
 	})
 
@@ -99,6 +99,70 @@ func TestRunSearchFailsWhenNoRecordsReturned(t *testing.T) {
 	}
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty output when no records are returned", stdout)
+	}
+	if !strings.Contains(stderr, "warning: no results returned for accession SAMN05276490; skipping") {
+		t.Fatalf("stderr = %q, want no-results warning", stderr)
+	}
+	if !strings.Contains(stderr, "Error: no results returned for accession SAMN05276490") {
+		t.Fatalf("stderr = %q, want final no-results error", stderr)
+	}
+}
+
+func TestRunSearchSkipsNoRecordAccessionsAndReturnsNonZero(t *testing.T) {
+	accessionFile, err := os.CreateTemp(t.TempDir(), "accessions-*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := accessionFile.WriteString("SAMN05276490\nSAMN15052188\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := accessionFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			t.Fatalf("path = %q, want /search", r.URL.Path)
+		}
+		query := r.URL.Query().Get("query")
+		switch {
+		case strings.Contains(query, "SAMN05276490"):
+			_, _ = w.Write([]byte(`[{"sample_accession":"SAMN05276490","study_accession":"PRJNA302362"}]`))
+		case strings.Contains(query, "SAMN15052188"):
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Fatalf("query = %q", query)
+		}
+	})
+
+	withTestClient(t, server)
+	code, stdout, stderr := captureStdoutStderr(t, func() int {
+		return run([]string{"search", "-f", accessionFile.Name(), "--outfmt", "json"})
+	})
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit code")
+	}
+
+	var got map[string][]map[string]any
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("error parsing stdout JSON: %v\nstdout = %s", err, stdout)
+	}
+	if _, ok := got["SAMN15052188"]; ok {
+		t.Fatalf("stdout includes skipped accession: %s", stdout)
+	}
+	records := got["SAMN05276490"]
+	if len(records) != 1 {
+		t.Fatalf("SAMN05276490 records = %d, want 1; stdout = %s", len(records), stdout)
+	}
+	if gotSample, _ := records[0]["sample_accession"].(string); gotSample != "SAMN05276490" {
+		t.Fatalf("sample_accession = %q, want SAMN05276490", gotSample)
+	}
+	if !strings.Contains(stderr, "warning: no results returned for accession SAMN15052188; skipping") {
+		t.Fatalf("stderr = %q, want no-results warning", stderr)
+	}
+	if !strings.Contains(stderr, "Error: no results returned for accession SAMN15052188") {
+		t.Fatalf("stderr = %q, want final no-results error", stderr)
 	}
 }
 

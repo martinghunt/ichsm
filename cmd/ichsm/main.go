@@ -160,18 +160,27 @@ func executeSearch(cmd *cobra.Command, opts searchOptions) error {
 	}
 
 	results, err := searchAccessions(cmd.Context(), client, accessions, fields, level, source, opts.debug, cmd.ErrOrStderr(), outfmt == outputFormatJSON)
-	if err != nil {
+	if err != nil && !isNoResultsSearchError(err) {
 		return err
 	}
 
-	if outfmt == outputFormatJSON {
-		return writeJSON(cmd.OutOrStdout(), results)
+	if len(results) > 0 {
+		if outfmt == outputFormatJSON {
+			if writeErr := writeJSON(cmd.OutOrStdout(), results); writeErr != nil {
+				return writeErr
+			}
+		} else {
+			rows, rowsErr := searchRows(results, fields)
+			if rowsErr != nil {
+				return rowsErr
+			}
+			if writeErr := writeRowsForOutputFormat(cmd.OutOrStdout(), rows, outfmt); writeErr != nil {
+				return writeErr
+			}
+		}
 	}
-	rows, err := searchRows(results, fields)
-	if err != nil {
-		return err
-	}
-	return writeRowsForOutputFormat(cmd.OutOrStdout(), rows, outfmt)
+
+	return err
 }
 
 func parseOutputFormat(format string, allowJSON bool) (string, error) {
@@ -493,6 +502,22 @@ type countResult struct {
 	Count          int                 `json:"count"`
 }
 
+type noResultsSearchError struct {
+	accessions []string
+}
+
+func (e *noResultsSearchError) Error() string {
+	if len(e.accessions) == 1 {
+		return fmt.Sprintf("no results returned for accession %s", e.accessions[0])
+	}
+	return fmt.Sprintf("no results returned for %d accessions", len(e.accessions))
+}
+
+func isNoResultsSearchError(err error) bool {
+	var noResultsErr *noResultsSearchError
+	return errors.As(err, &noResultsErr)
+}
+
 func prepareAccessionSearches(accessions []string, level ichsm.AccessionType, errOut io.Writer) ([]accessionSearch, error) {
 	if len(accessions) == 0 {
 		return nil, errors.New("no accessions provided")
@@ -533,12 +558,16 @@ func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []st
 	if err != nil {
 		return nil, err
 	}
+	if errOut == nil {
+		errOut = io.Discard
+	}
 
 	if preflightLargeJSON {
 		warnLargeJSONSearchCounts(ctx, client, toSearch, level, source, debug, errOut)
 	}
 
 	results := make([]ichsm.SearchResult, 0, len(toSearch))
+	var noResults []string
 	for _, accession := range toSearch {
 		if debug {
 			if level == "" {
@@ -553,7 +582,9 @@ func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []st
 			return nil, fmt.Errorf("error getting data for accession %s: %w", accession.input, err)
 		}
 		if len(records) == 0 {
-			return nil, fmt.Errorf("no results returned for accession %s", accession.input)
+			fmt.Fprintf(errOut, "warning: no results returned for accession %s; skipping\n", accession.input)
+			noResults = append(noResults, accession.input)
+			continue
 		}
 
 		results = append(results, ichsm.SearchResult{
@@ -567,6 +598,9 @@ func searchAccessions(ctx context.Context, client *ichsm.Client, accessions []st
 		})
 	}
 
+	if len(noResults) > 0 {
+		return results, &noResultsSearchError{accessions: noResults}
+	}
 	return results, nil
 }
 
