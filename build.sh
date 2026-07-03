@@ -24,6 +24,7 @@ Options:
                       darwin/linux/windows x amd64/arm64.
                       Release outputs are compressed:
                       .tar.gz for darwin/linux, .zip for windows.
+                      A SHA-256 checksum file is written alongside them.
   --all               Same target matrix as --release, but version is optional.
   --version VERSION   Version string for release artifact filenames and CLI version.
   --os GOOS           Build only for the specified GOOS.
@@ -45,6 +46,7 @@ version=""
 output_dir=""
 requested_os=""
 requested_arch=""
+release_artifacts=()
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -127,21 +129,46 @@ package_release_artifact() {
 	local outfile="$2"
 	local artifact="$3"
 	local package_base="$output_dir/${artifact}"
+	local package_name=""
 
 	case "$goos" in
 		windows)
+			package_name="${artifact}.zip"
 			echo "packaging ${package_base}.zip"
 			(
 				cd "$output_dir"
-				zip -q -m "${artifact}.zip" "$(basename "$outfile")"
+				zip -q -m "$package_name" "$(basename "$outfile")"
 			)
 			;;
 		*)
+			package_name="${artifact}.tar.gz"
 			echo "packaging ${package_base}.tar.gz"
-			tar -C "$output_dir" -czf "${package_base}.tar.gz" "$(basename "$outfile")"
+			tar -C "$output_dir" -czf "$output_dir/$package_name" "$(basename "$outfile")"
 			rm -f "$outfile"
 			;;
 	esac
+	release_artifacts+=("$package_name")
+}
+
+write_release_checksums() {
+	local checksum_file="$output_dir/${BIN_NAME}-${version}-checksums.txt"
+	local tmp_file="${checksum_file}.tmp"
+
+	if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+		echo "No SHA-256 checksum tool found: need sha256sum or shasum" >&2
+		exit 1
+	fi
+
+	: > "$tmp_file"
+	for artifact in "${release_artifacts[@]}"; do
+		if command -v sha256sum >/dev/null 2>&1; then
+			(cd "$output_dir" && sha256sum "$artifact") >> "$tmp_file"
+		else
+			(cd "$output_dir" && shasum -a 256 "$artifact") >> "$tmp_file"
+		fi
+	done
+	mv "$tmp_file" "$checksum_file"
+	echo "wrote ${checksum_file#$ROOT_DIR/}"
 }
 
 build_one() {
@@ -187,6 +214,9 @@ if [[ $release_mode -eq 1 || $all_mode -eq 1 ]]; then
 			build_one "$goos" "$goarch"
 		done
 	done
+	if [[ $release_mode -eq 1 ]]; then
+		write_release_checksums
+	fi
 	exit 0
 fi
 

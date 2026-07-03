@@ -21,12 +21,23 @@ The simplest way to install `ichsm` is to download the latest prebuilt binary fr
 - https://github.com/martinghunt/ichsm/releases/latest
 
 Choose the archive or binary matching your OS and CPU architecture.
+Release pages also include a SHA-256 checksum file named like `ichsm-v0.7.0-checksums.txt`.
+Use it to verify downloaded archives before installing.
 
 After installing, check the version with:
 
 ```
 ichsm --version
 ```
+
+To update an installed release binary in place:
+
+```
+ichsm update
+ichsm update --check
+```
+
+`ichsm update` checks the latest GitHub release, verifies the downloaded release archive against the published SHA-256 checksum file, and replaces the installed binary when a newer release is available. Local `dev` builds are not updated unless you pass `--force`.
 
 If you want to build locally instead:
 
@@ -408,3 +419,12 @@ For a local check of the full release matrix:
 ```
 ./build.sh --release --version v1.2.3
 ```
+
+That produces release archives named like:
+
+- `ichsm-v1.2.3-darwin-arm64.tar.gz`
+- `ichsm-v1.2.3-linux-amd64.tar.gz`
+- `ichsm-v1.2.3-windows-amd64.exe.zip`
+- `ichsm-v1.2.3-checksums.txt`
+
+Use `ichsm update` to install a newer release archive over an existing installed release binary.

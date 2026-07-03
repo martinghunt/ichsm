@@ -5,11 +5,22 @@
 Download the latest build from the [latest release](https://github.com/martinghunt/ichsm/releases/latest).
 
 Choose the archive or binary that matches your operating system and CPU
-architecture. Put the `ichsm` executable somewhere on your `PATH`, then check:
+architecture. Release pages include a SHA-256 checksum file named like
+`ichsm-v0.7.0-checksums.txt`. Put the `ichsm` executable somewhere on your
+`PATH`, then check:
 
 ```
 ichsm --version
 ```
+
+To update an installed release binary in place:
+
+```
+ichsm update
+ichsm update --check
+```
+
+`ichsm update` verifies the downloaded release archive against the published checksum file before replacing the installed binary. Local `dev` builds are not updated unless you pass `--force`.
 
 ## macOS
 
