@@ -105,6 +105,46 @@ func ncbiAccessionCandidates(inputAccession string, accession string, accessionT
 	return candidates
 }
 
+// ncbiESearchResponse is the shared envelope returned by NCBI's esearch.fcgi,
+// used by both accession lookups (ncbiSearchID) and BioProject lookups
+// (ncbiBioProjectID in publications.go).
+type ncbiESearchResponse struct {
+	Error         string `json:"error"`
+	ESearchResult struct {
+		IDList []string `json:"idlist"`
+	} `json:"esearchresult"`
+}
+
+func parseNCBIESearchResponse(body []byte, context string) (ncbiESearchResponse, error) {
+	var response ncbiESearchResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return ncbiESearchResponse{}, fmt.Errorf("error parsing NCBI %s json: %w", context, err)
+	}
+	if response.Error != "" {
+		return ncbiESearchResponse{}, fmt.Errorf("NCBI %s error: %s", context, response.Error)
+	}
+	return response, nil
+}
+
+// ncbiESummaryEnvelope is the shared envelope returned by NCBI's
+// esummary.fcgi, used by both accession summaries (ncbiSummary) and PubMed
+// summaries (addNCBIPubMedSummaryBatch in publications.go).
+type ncbiESummaryEnvelope struct {
+	Error  string                     `json:"error"`
+	Result map[string]json.RawMessage `json:"result"`
+}
+
+func parseNCBIESummaryEnvelope(body []byte, context string) (ncbiESummaryEnvelope, error) {
+	var envelope ncbiESummaryEnvelope
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return ncbiESummaryEnvelope{}, fmt.Errorf("error parsing NCBI %s json: %w", context, err)
+	}
+	if envelope.Error != "" {
+		return ncbiESummaryEnvelope{}, fmt.Errorf("NCBI %s error: %s", context, envelope.Error)
+	}
+	return envelope, nil
+}
+
 func (c *Client) ncbiSearchID(ctx context.Context, db string, resultType AccessionType, accessions []string) (string, error) {
 	for _, accession := range accessions {
 		params := url.Values{}
@@ -119,17 +159,9 @@ func (c *Client) ncbiSearchID(ctx context.Context, db string, resultType Accessi
 			return "", err
 		}
 
-		var response struct {
-			Error         string `json:"error"`
-			ESearchResult struct {
-				IDList []string `json:"idlist"`
-			} `json:"esearchresult"`
-		}
-		if err := json.Unmarshal(body, &response); err != nil {
-			return "", fmt.Errorf("error parsing NCBI esearch json: %w", err)
-		}
-		if response.Error != "" {
-			return "", fmt.Errorf("NCBI esearch error: %s", response.Error)
+		response, err := parseNCBIESearchResponse(body, "esearch")
+		if err != nil {
+			return "", err
 		}
 		if len(response.ESearchResult.IDList) > 0 {
 			return response.ESearchResult.IDList[0], nil
@@ -157,15 +189,9 @@ func (c *Client) ncbiSummary(ctx context.Context, db string, id string) (Record,
 		return nil, err
 	}
 
-	var envelope struct {
-		Error  string                     `json:"error"`
-		Result map[string]json.RawMessage `json:"result"`
-	}
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return nil, fmt.Errorf("error parsing NCBI esummary json: %w", err)
-	}
-	if envelope.Error != "" {
-		return nil, fmt.Errorf("NCBI esummary error: %s", envelope.Error)
+	envelope, err := parseNCBIESummaryEnvelope(body, "esummary")
+	if err != nil {
+		return nil, err
 	}
 
 	raw, ok := envelope.Result[id]

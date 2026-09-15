@@ -308,17 +308,9 @@ func (c *Client) ncbiBioProjectID(ctx context.Context, accession string) (string
 		return "", err
 	}
 
-	var response struct {
-		Error         string `json:"error"`
-		ESearchResult struct {
-			IDList []string `json:"idlist"`
-		} `json:"esearchresult"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return "", fmt.Errorf("error parsing NCBI bioproject esearch json: %w", err)
-	}
-	if response.Error != "" {
-		return "", fmt.Errorf("NCBI bioproject esearch error: %s", response.Error)
+	response, err := parseNCBIESearchResponse(body, "bioproject esearch")
+	if err != nil {
+		return "", err
 	}
 	if len(response.ESearchResult.IDList) == 0 {
 		return "", nil
@@ -399,15 +391,9 @@ func (c *Client) addNCBIPubMedSummaryBatch(ctx context.Context, summaries map[st
 		return err
 	}
 
-	var envelope struct {
-		Error  string                     `json:"error"`
-		Result map[string]json.RawMessage `json:"result"`
-	}
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return fmt.Errorf("error parsing NCBI pubmed esummary json: %w", err)
-	}
-	if envelope.Error != "" {
-		return fmt.Errorf("NCBI pubmed esummary error: %s", envelope.Error)
+	envelope, err := parseNCBIESummaryEnvelope(body, "pubmed esummary")
+	if err != nil {
+		return err
 	}
 
 	for _, pubMedID := range pubMedIDs {
