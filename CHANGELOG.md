@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Retry transient network failures (e.g. a dropped connection) that occur while streaming an ENA TSV response in `ichsm match`, instead of aborting the whole batch immediately.
 - Make `ichsm search` merge results whose default field set differs per accession (e.g. a batch mixing WGS-set and TSA/TLS-set "contig_set" accessions) instead of failing the whole batch with "field set changed between results".
+- Report `ichsm summary` platform counts as `UNKNOWN` rather than silently folding them into `OTHER` when a per-platform count request fails.
 
 ### Changed
 - `Client.StreamENATSV` now takes an additional `retryable bool` parameter indicating whether its callbacks can safely be re-run from the start on a retried request.

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/martinghunt/ichsm"
 )
 
 func TestRunSummaryWritesTSV(t *testing.T) {
@@ -118,5 +121,39 @@ func TestRunSummaryWritesTSV(t *testing.T) {
 		"PRJEB1787\tPRJEB1787\tstudy\tstudy\tena\tTara Oceans prokaryotes\tLong project description\tmarine metagenome\t408172\tPRJEB1787;ERP001736\t.\t.\t.\t.\t.\t.\tILLUMINA;LS454\tILLUMINA:2;LS454:1\t.\t2013-04-12\t2025-03-11\t2\t3\t1\t0\t1\t1\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestSummaryPlatformCountsReportsUnknownWhenAPlatformCountFails(t *testing.T) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+		switch {
+		case strings.Contains(query, "instrument_platform=ILLUMINA"):
+			_, _ = w.Write([]byte(`{"count":"2"}`))
+		case strings.Contains(query, "instrument_platform=LS454"):
+			http.Error(w, "boom", http.StatusInternalServerError)
+		default:
+			_, _ = w.Write([]byte(`{"count":"0"}`))
+		}
+	})
+
+	client := &ichsm.Client{
+		BaseURL:              server.URL,
+		HTTPClient:           server.Client(),
+		ENARequestsPerSecond: -1,
+		MaxRequestRetries:    -1,
+	}
+
+	runCount := 5
+	counts := summaryPlatformCounts(context.Background(), client, "PRJEB1787", ichsm.AccessionTypeStudy, &runCount)
+
+	if counts["ILLUMINA"] != 2 {
+		t.Fatalf("ILLUMINA = %d, want 2", counts["ILLUMINA"])
+	}
+	if _, ok := counts["OTHER"]; ok {
+		t.Fatalf("counts = %#v, want no OTHER key when a platform count failed", counts)
+	}
+	if counts["UNKNOWN"] != 3 {
+		t.Fatalf("UNKNOWN = %d, want 3", counts["UNKNOWN"])
 	}
 }

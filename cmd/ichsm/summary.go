@@ -166,7 +166,7 @@ func summarizeAccession(ctx context.Context, client *ichsm.Client, accession str
 		summary.ContigSetCount = summaryContigSetCount(ctx, client, fixedAccession, accessionType)
 		summary.PlatformCounts = summaryPlatformCounts(ctx, client, fixedAccession, accessionType, summary.RunCount)
 		for _, platform := range orderedSummaryCountKeys(summary.PlatformCounts) {
-			if platform != "OTHER" {
+			if platform != "OTHER" && platform != "UNKNOWN" {
 				summary.Platforms = appendUniqueStringValue(summary.Platforms, platform)
 			}
 		}
@@ -287,18 +287,31 @@ func summaryPublicationCount(ctx context.Context, client *ichsm.Client, accessio
 func summaryPlatformCounts(ctx context.Context, client *ichsm.Client, accession string, accessionType ichsm.AccessionType, runCount *int) map[string]int {
 	counts := map[string]int{}
 	total := 0
+	failed := false
 	for _, platform := range summaryRunPlatforms {
 		_, count, err := client.CountENAFiltered(ctx, accession, accessionType, ichsm.AccessionTypeRun, map[string]string{
 			"instrument_platform": platform,
 		})
-		if err != nil || count == 0 {
+		if err != nil {
+			failed = true
+			continue
+		}
+		if count == 0 {
 			continue
 		}
 		counts[platform] = count
 		total += count
 	}
 	if runCount != nil && total < *runCount {
-		counts["OTHER"] = *runCount - total
+		remainder := *runCount - total
+		if failed {
+			// A platform count request failed, so the remainder may include
+			// runs from that platform rather than genuinely uncounted ones -
+			// report it separately from OTHER instead of misattributing it.
+			counts["UNKNOWN"] = remainder
+		} else {
+			counts["OTHER"] = remainder
+		}
 	}
 	if len(counts) == 0 {
 		return nil
@@ -395,6 +408,10 @@ func orderedSummaryCountKeys(counts map[string]int) []string {
 	if _, ok := counts["OTHER"]; ok {
 		keys = append(keys, "OTHER")
 		seen["OTHER"] = true
+	}
+	if _, ok := counts["UNKNOWN"]; ok {
+		keys = append(keys, "UNKNOWN")
+		seen["UNKNOWN"] = true
 	}
 	for key := range counts {
 		if !seen[key] {
