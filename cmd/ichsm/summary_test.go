@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/martinghunt/ichsm"
@@ -14,6 +13,16 @@ func TestRunSummaryWritesTSV(t *testing.T) {
 		switch r.URL.Path {
 		case "/search":
 			query := r.URL.Query()
+			if query.Get("result") == "read_run" && query.Get("format") == "tsv" {
+				if got := query.Get("query"); got != "study_accession=PRJEB1787" {
+					t.Fatalf("platform count query = %q", got)
+				}
+				if got := query.Get("fields"); got != "instrument_platform" {
+					t.Fatalf("platform count fields = %q", got)
+				}
+				_, _ = w.Write([]byte("instrument_platform\nILLUMINA\nILLUMINA\nLS454\n"))
+				return
+			}
 			if got := query.Get("result"); got != "study" {
 				t.Fatalf("summary result = %q, want study", got)
 			}
@@ -34,21 +43,10 @@ func TestRunSummaryWritesTSV(t *testing.T) {
 				}
 				_, _ = w.Write([]byte(`{"count":"2"}`))
 			case "read_run":
-				if countQuery == "study_accession=PRJEB1787" {
-					_, _ = w.Write([]byte(`{"count":"3"}`))
-					return
+				if countQuery != "study_accession=PRJEB1787" {
+					t.Fatalf("run count query = %q", countQuery)
 				}
-				switch countQuery {
-				case "study_accession=PRJEB1787 AND instrument_platform=ILLUMINA":
-					_, _ = w.Write([]byte(`{"count":"2"}`))
-				case "study_accession=PRJEB1787 AND instrument_platform=LS454":
-					_, _ = w.Write([]byte(`{"count":"1"}`))
-				default:
-					if !strings.HasPrefix(countQuery, "study_accession=PRJEB1787 AND instrument_platform=") {
-						t.Fatalf("platform count query = %q", countQuery)
-					}
-					_, _ = w.Write([]byte(`{"count":"0"}`))
-				}
+				_, _ = w.Write([]byte(`{"count":"3"}`))
 			case "assembly":
 				if countQuery != "study_accession=PRJEB1787" {
 					t.Fatalf("assembly count query = %q", countQuery)
@@ -124,17 +122,17 @@ func TestRunSummaryWritesTSV(t *testing.T) {
 	}
 }
 
-func TestSummaryPlatformCountsReportsUnknownWhenAPlatformCountFails(t *testing.T) {
+func TestSummaryPlatformCountsUsesASingleGroupedQuery(t *testing.T) {
+	requests := 0
 	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		query := r.URL.Query().Get("query")
-		switch {
-		case strings.Contains(query, "instrument_platform=ILLUMINA"):
-			_, _ = w.Write([]byte(`{"count":"2"}`))
-		case strings.Contains(query, "instrument_platform=LS454"):
-			http.Error(w, "boom", http.StatusInternalServerError)
-		default:
-			_, _ = w.Write([]byte(`{"count":"0"}`))
+		requests++
+		if got := r.URL.Query().Get("query"); got != "study_accession=PRJEB1787" {
+			t.Fatalf("query = %q", got)
 		}
+		if got := r.URL.Query().Get("fields"); got != "instrument_platform" {
+			t.Fatalf("fields = %q", got)
+		}
+		_, _ = w.Write([]byte("instrument_platform\nILLUMINA\nILLUMINA\nPACBIO_SMRT\nSOME_NEW_PLATFORM\n"))
 	})
 
 	client := &ichsm.Client{
@@ -144,16 +142,36 @@ func TestSummaryPlatformCountsReportsUnknownWhenAPlatformCountFails(t *testing.T
 		MaxRequestRetries:    -1,
 	}
 
-	runCount := 5
-	counts := summaryPlatformCounts(context.Background(), client, "PRJEB1787", ichsm.AccessionTypeStudy, &runCount)
+	counts := summaryPlatformCounts(context.Background(), client, "PRJEB1787", ichsm.AccessionTypeStudy)
 
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
+	}
 	if counts["ILLUMINA"] != 2 {
 		t.Fatalf("ILLUMINA = %d, want 2", counts["ILLUMINA"])
 	}
-	if _, ok := counts["OTHER"]; ok {
-		t.Fatalf("counts = %#v, want no OTHER key when a platform count failed", counts)
+	if counts["PACBIO_SMRT"] != 1 {
+		t.Fatalf("PACBIO_SMRT = %d, want 1", counts["PACBIO_SMRT"])
 	}
-	if counts["UNKNOWN"] != 3 {
-		t.Fatalf("UNKNOWN = %d, want 3", counts["UNKNOWN"])
+	if counts["OTHER"] != 1 {
+		t.Fatalf("OTHER = %d, want 1 (SOME_NEW_PLATFORM is not a known platform)", counts["OTHER"])
+	}
+}
+
+func TestSummaryPlatformCountsReturnsNilOnQueryFailure(t *testing.T) {
+	server := withHTTPTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	})
+
+	client := &ichsm.Client{
+		BaseURL:              server.URL,
+		HTTPClient:           server.Client(),
+		ENARequestsPerSecond: -1,
+		MaxRequestRetries:    -1,
+	}
+
+	counts := summaryPlatformCounts(context.Background(), client, "PRJEB1787", ichsm.AccessionTypeStudy)
+	if counts != nil {
+		t.Fatalf("counts = %#v, want nil", counts)
 	}
 }

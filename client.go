@@ -574,6 +574,53 @@ func (c *Client) countENAFiltered(ctx context.Context, accession string, accessi
 	return resultType, count, nil
 }
 
+// CountENAGroupedByField returns per-value counts of field for one normalized
+// accession at a requested output level, computed from a single streamed
+// query instead of one count request per distinct value.
+func (c *Client) CountENAGroupedByField(ctx context.Context, accession string, accessionType AccessionType, level AccessionType, field string) (AccessionType, map[string]int, error) {
+	resultType, err := ResolveSearchLevel(accessionType, level)
+	if err != nil {
+		return "", nil, err
+	}
+	if resultType == AccessionTypeContigSet {
+		return "", nil, fmt.Errorf("cannot group %s counts by field", resultType)
+	}
+
+	if accessionType == AccessionTypeStudy && resultType != AccessionTypeStudy && !isPrimaryStudyAccession(accession) {
+		accession, err = c.resolvePrimaryStudyAccession(ctx, accession)
+		if err != nil {
+			return "", nil, err
+		}
+	}
+
+	_, query, err := SearchKeyValue(accessionType, resultType, accession)
+	if err != nil {
+		return "", nil, err
+	}
+
+	counts := map[string]int{}
+	_, err = c.StreamENATSV(ctx, ENAQueryOptions{
+		Result: string(resultType),
+		Query:  query,
+		Fields: []string{field},
+	}, func(ENAQueryResult) error {
+		// Reset on every attempt, including retries, so a retried request
+		// after a transient failure does not double-count rows already
+		// tallied by the failed attempt.
+		counts = map[string]int{}
+		return nil
+	}, func(record Record) error {
+		if value, ok := record[field].(string); ok && value != "" {
+			counts[value]++
+		}
+		return nil
+	}, true)
+	if err != nil {
+		return "", nil, err
+	}
+	return resultType, counts, nil
+}
+
 func (c *Client) countENAContigSet(ctx context.Context, accession string, accessionType AccessionType) (AccessionType, int, error) {
 	return c.countENAContigSetFiltered(ctx, accession, accessionType, nil)
 }

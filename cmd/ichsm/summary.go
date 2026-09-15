@@ -164,9 +164,9 @@ func summarizeAccession(ctx context.Context, client *ichsm.Client, accession str
 		summary.AssemblyCount = summaryCount(ctx, client, fixedAccession, accessionType, ichsm.AccessionTypeAssembly)
 		summary.AnalysisCount = summaryCount(ctx, client, fixedAccession, accessionType, ichsm.AccessionTypeAnalysis)
 		summary.ContigSetCount = summaryContigSetCount(ctx, client, fixedAccession, accessionType)
-		summary.PlatformCounts = summaryPlatformCounts(ctx, client, fixedAccession, accessionType, summary.RunCount)
+		summary.PlatformCounts = summaryPlatformCounts(ctx, client, fixedAccession, accessionType)
 		for _, platform := range orderedSummaryCountKeys(summary.PlatformCounts) {
-			if platform != "OTHER" && platform != "UNKNOWN" {
+			if platform != "OTHER" {
 				summary.Platforms = appendUniqueStringValue(summary.Platforms, platform)
 			}
 		}
@@ -284,34 +284,28 @@ func summaryPublicationCount(ctx context.Context, client *ichsm.Client, accessio
 	return &count
 }
 
-func summaryPlatformCounts(ctx context.Context, client *ichsm.Client, accession string, accessionType ichsm.AccessionType, runCount *int) map[string]int {
-	counts := map[string]int{}
-	total := 0
-	failed := false
-	for _, platform := range summaryRunPlatforms {
-		_, count, err := client.CountENAFiltered(ctx, accession, accessionType, ichsm.AccessionTypeRun, map[string]string{
-			"instrument_platform": platform,
-		})
-		if err != nil {
-			failed = true
-			continue
-		}
-		if count == 0 {
-			continue
-		}
-		counts[platform] = count
-		total += count
+func summaryPlatformCounts(ctx context.Context, client *ichsm.Client, accession string, accessionType ichsm.AccessionType) map[string]int {
+	_, grouped, err := client.CountENAGroupedByField(ctx, accession, accessionType, ichsm.AccessionTypeRun, "instrument_platform")
+	if err != nil {
+		return nil
 	}
-	if runCount != nil && total < *runCount {
-		remainder := *runCount - total
-		if failed {
-			// A platform count request failed, so the remainder may include
-			// runs from that platform rather than genuinely uncounted ones -
-			// report it separately from OTHER instead of misattributing it.
-			counts["UNKNOWN"] = remainder
+
+	known := map[string]bool{}
+	for _, platform := range summaryRunPlatforms {
+		known[platform] = true
+	}
+
+	counts := map[string]int{}
+	other := 0
+	for platform, count := range grouped {
+		if known[platform] {
+			counts[platform] = count
 		} else {
-			counts["OTHER"] = remainder
+			other += count
 		}
+	}
+	if other > 0 {
+		counts["OTHER"] = other
 	}
 	if len(counts) == 0 {
 		return nil
@@ -408,10 +402,6 @@ func orderedSummaryCountKeys(counts map[string]int) []string {
 	if _, ok := counts["OTHER"]; ok {
 		keys = append(keys, "OTHER")
 		seen["OTHER"] = true
-	}
-	if _, ok := counts["UNKNOWN"]; ok {
-		keys = append(keys, "UNKNOWN")
-		seen["UNKNOWN"] = true
 	}
 	for key := range counts {
 		if !seen[key] {

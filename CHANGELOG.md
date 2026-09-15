@@ -16,12 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Retry transient network failures (e.g. a dropped connection) that occur while streaming an ENA TSV response in `ichsm match`, instead of aborting the whole batch immediately.
 - Make `ichsm search` merge results whose default field set differs per accession (e.g. a batch mixing WGS-set and TSA/TLS-set "contig_set" accessions) instead of failing the whole batch with "field set changed between results".
-- Report `ichsm summary` platform counts as `UNKNOWN` rather than silently folding them into `OTHER` when a per-platform count request fails.
 - Give each `Client` its own ENA/NCBI rate limiters instead of sharing one pair of limiters across every `Client` in the process, so `Client` values with different configured rates no longer pace off each other's clock.
 - Stop generating a malformed WGS/TSA/TLS master accession for a 3+ digit version suffix (e.g. `AAAA00000000.100`); such input now falls back to being identified as a plain sequence accession instead of an invalid contig-set master accession.
+- Make `ichsm summary`'s platform breakdown issue a single grouped ENA query instead of one count request per known platform (13 requests), so a failure now fails the whole breakdown explicitly instead of silently misattributing one platform's runs to `OTHER`.
 
 ### Changed
 - `Client.StreamENATSV` now takes an additional `retryable bool` parameter indicating whether its callbacks can safely be re-run from the start on a retried request.
+- Add `Client.CountENAGroupedByField` to count records grouped by a field value with a single streamed query.
 
 ## [0.7.0] - 2026-06-26
 

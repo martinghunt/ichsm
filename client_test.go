@@ -685,6 +685,104 @@ func TestCountENASecondaryStudyAtRunLevel(t *testing.T) {
 	}
 }
 
+func TestCountENAGroupedByFieldResolvesSecondaryStudyAndGroups(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/search":
+			query := r.URL.Query()
+			if query.Get("format") == "tsv" {
+				if got := query.Get("result"); got != "read_run" {
+					t.Fatalf("grouped result = %q, want read_run", got)
+				}
+				if got := query.Get("query"); got != "study_accession=PRJEB1787" {
+					t.Fatalf("grouped query = %q", got)
+				}
+				if got := query.Get("fields"); got != "instrument_platform" {
+					t.Fatalf("grouped fields = %q", got)
+				}
+				_, _ = w.Write([]byte("instrument_platform\nILLUMINA\nILLUMINA\nLS454\n"))
+				return
+			}
+			if got := query.Get("query"); got != "study_accession=ERP001736 OR secondary_study_accession=ERP001736" {
+				t.Fatalf("study query = %q", got)
+			}
+			_, _ = w.Write([]byte(`[{"study_accession":"PRJEB1787"}]`))
+		default:
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	resultType, counts, err := client.CountENAGroupedByField(context.Background(), "ERP001736", AccessionTypeStudy, AccessionTypeRun, "instrument_platform")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultType != AccessionTypeRun {
+		t.Fatalf("resultType = %q, want %q", resultType, AccessionTypeRun)
+	}
+	if counts["ILLUMINA"] != 2 || counts["LS454"] != 1 {
+		t.Fatalf("counts = %#v, want ILLUMINA:2 LS454:1", counts)
+	}
+}
+
+type partialThenErrorReader struct {
+	data []byte
+	err  error
+}
+
+func (r *partialThenErrorReader) Read(p []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, r.err
+	}
+	n := copy(p, r.data)
+	r.data = r.data[n:]
+	return n, nil
+}
+
+func (r *partialThenErrorReader) Close() error {
+	return nil
+}
+
+func TestCountENAGroupedByFieldDoesNotDoubleCountOnRetry(t *testing.T) {
+	requests := 0
+	client := &Client{
+		BaseURL: "https://example.test/",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			requests++
+			if requests == 1 {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       &partialThenErrorReader{data: []byte("instrument_platform\nILLUMINA\n"), err: io.ErrUnexpectedEOF},
+					Header:     http.Header{},
+					Request:    req,
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("instrument_platform\nILLUMINA\nLS454\n")),
+				Header:     http.Header{},
+				Request:    req,
+			}, nil
+		})},
+		ENARequestsPerSecond:  -1,
+		MaxRequestRetries:     2,
+		RequestRetryBaseDelay: time.Millisecond,
+		RequestRetryMaxDelay:  time.Millisecond,
+	}
+
+	_, counts, err := client.CountENAGroupedByField(context.Background(), "PRJEB1787", AccessionTypeStudy, AccessionTypeRun, "instrument_platform")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
+	}
+	if counts["ILLUMINA"] != 1 || counts["LS454"] != 1 {
+		t.Fatalf("counts = %#v, want ILLUMINA:1 LS454:1 (no double-counting from the failed first attempt)", counts)
+	}
+}
+
 func TestCountENAFilteredGroupsORQuery(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/count" {
