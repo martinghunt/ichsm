@@ -258,7 +258,7 @@ func (c *Client) QueryENATSV(ctx context.Context, opts ENAQueryOptions) (ENAQuer
 	result, err := c.StreamENATSV(ctx, opts, nil, func(record Record) error {
 		records = append(records, record)
 		return nil
-	})
+	}, false)
 	if err != nil {
 		return ENAQueryResult{}, err
 	}
@@ -270,7 +270,13 @@ func (c *Client) QueryENATSV(ctx context.Context, opts ENAQueryOptions) (ENAQuer
 // TSV output, and calls onRecord for each parsed data row as it arrives. The
 // optional onHeader callback is called after the TSV header is parsed and before
 // the first record callback.
-func (c *Client) StreamENATSV(ctx context.Context, opts ENAQueryOptions, onHeader func(ENAQueryResult) error, onRecord func(Record) error) (ENAQueryResult, error) {
+//
+// retryable must only be true when onHeader and onRecord can be safely
+// re-run from the start on a retried request, since a transient failure may
+// occur after some rows have already been delivered. Pass false when the
+// callbacks have non-idempotent side effects, such as writing output as it
+// streams.
+func (c *Client) StreamENATSV(ctx context.Context, opts ENAQueryOptions, onHeader func(ENAQueryResult) error, onRecord func(Record) error, retryable bool) (ENAQueryResult, error) {
 	resultType, enaResult, resolvedFields, params, err := enaRawQueryParams(opts, true)
 	if err != nil {
 		return ENAQueryResult{}, err
@@ -302,7 +308,7 @@ func (c *Client) StreamENATSV(ctx context.Context, opts ENAQueryOptions, onHeade
 			}
 			return nil
 		})
-	})
+	}, retryable)
 	if err != nil {
 		return ENAQueryResult{}, err
 	}
@@ -912,12 +918,12 @@ func (c *Client) request(ctx context.Context, path string, params url.Values) ([
 	return c.requestWithBase(ctx, baseURL, path, params, "ENA", &enaRequestLimiter, c.enaRateLimitInterval())
 }
 
-func (c *Client) requestStream(ctx context.Context, path string, params url.Values, handle func(io.Reader) error) error {
+func (c *Client) requestStream(ctx context.Context, path string, params url.Values, handle func(io.Reader) error, retryable bool) error {
 	baseURL := BasePortalURL
 	if c != nil && c.BaseURL != "" {
 		baseURL = c.BaseURL
 	}
-	return c.requestStreamWithBase(ctx, baseURL, path, params, "ENA", &enaRequestLimiter, c.enaRateLimitInterval(), handle)
+	return c.requestStreamWithBase(ctx, baseURL, path, params, "ENA", &enaRequestLimiter, c.enaRateLimitInterval(), handle, retryable)
 }
 
 func (c *Client) requestWithBase(ctx context.Context, baseURL string, path string, params url.Values, serviceName string, limiter *requestRateLimiter, rateLimitInterval time.Duration) ([]byte, error) {
@@ -952,7 +958,14 @@ func (c *Client) requestWithBase(ctx context.Context, baseURL string, path strin
 	}
 }
 
-func (c *Client) requestStreamWithBase(ctx context.Context, baseURL string, path string, params url.Values, serviceName string, limiter *requestRateLimiter, rateLimitInterval time.Duration, handle func(io.Reader) error) error {
+// requestStreamWithBase requests a streaming response and passes its body to
+// handle, retrying transient failures like requestWithBase does. retryable
+// must only be true when handle can be safely re-run from the start on retry
+// (e.g. it accumulates into an idempotent, from-scratch-safe structure) -
+// handle may have already been partially consumed, so retrying is unsafe for
+// callers that produce non-idempotent side effects such as writing output
+// incrementally.
+func (c *Client) requestStreamWithBase(ctx context.Context, baseURL string, path string, params url.Values, serviceName string, limiter *requestRateLimiter, rateLimitInterval time.Duration, handle func(io.Reader) error, retryable bool) error {
 	requestURL, err := requestURL(baseURL, path, params)
 	if err != nil {
 		return err
@@ -970,18 +983,24 @@ func (c *Client) requestStreamWithBase(ctx context.Context, baseURL string, path
 		if err == nil {
 			return nil
 		}
+
+		retryErr := err
 		var streamErr *requestStreamConsumedError
 		if errors.As(err, &streamErr) {
-			return streamErr.err
-		}
-		if !isRetryableRequestError(err) || attempt >= maxRetries {
-			if attempt > 0 {
-				return fmt.Errorf("error requesting data after %d attempts: %w", attempt+1, err)
+			if !retryable {
+				return streamErr.err
 			}
-			return err
+			retryErr = streamErr.err
 		}
 
-		delay := c.requestRetryDelay(attempt, err)
+		if !isRetryableRequestError(retryErr) || attempt >= maxRetries {
+			if attempt > 0 {
+				return fmt.Errorf("error requesting data after %d attempts: %w", attempt+1, retryErr)
+			}
+			return retryErr
+		}
+
+		delay := c.requestRetryDelay(attempt, retryErr)
 		if err := sleepContext(ctx, delay); err != nil {
 			return fmt.Errorf("error waiting to retry request: %w", err)
 		}

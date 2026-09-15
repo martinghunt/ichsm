@@ -111,6 +111,8 @@ func executeQuery(cmd *cobra.Command, opts queryOptions) error {
 func streamQueryTSV(ctx context.Context, client *ichsm.Client, opts ichsm.ENAQueryOptions, out io.Writer, verbose bool, errOut io.Writer) error {
 	var columns []string
 	var records int
+	// retryable=false: rows are written to out as they arrive, so retrying
+	// after a partial stream would duplicate already-written rows.
 	_, err := client.StreamENATSV(ctx, opts, func(result ichsm.ENAQueryResult) error {
 		columns = append([]string(nil), result.Fields...)
 		_, err := fmt.Fprintln(out, strings.Join(columns, "\t"))
@@ -129,7 +131,7 @@ func streamQueryTSV(ctx context.Context, client *ichsm.Client, opts ichsm.ENAQue
 			fmt.Fprintf(errOut, "downloaded %d records\n", records)
 		}
 		return nil
-	})
+	}, false)
 	if err != nil {
 		return err
 	}

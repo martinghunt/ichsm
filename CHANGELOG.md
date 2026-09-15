@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Neutralize leading `=`, `+`, `-`, and `@` characters in TSV/table cell values to prevent spreadsheet formula injection (CSV injection) when record text originating from ENA/NCBI is opened in Excel, LibreOffice, or Google Sheets.
 
+### Fixed
+- Retry transient network failures (e.g. a dropped connection) that occur while streaming an ENA TSV response in `ichsm match`, instead of aborting the whole batch immediately.
+
+### Changed
+- `Client.StreamENATSV` now takes an additional `retryable bool` parameter indicating whether its callbacks can safely be re-run from the start on a retried request.
+
 ## [0.7.0] - 2026-06-26
 
 ### Added

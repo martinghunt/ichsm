@@ -431,6 +431,9 @@ func fetchMatchGroupKeys(ctx context.Context, client *ichsm.Client, result strin
 		if len(batch) > 0 {
 			batchQuery = andENAQueries(batchQuery, groupFilterQuery(groupBy, batch))
 		}
+		// retryable=true: groups is a set, so replaying already-seen records
+		// after a transient mid-stream failure is safe (totalRecords may
+		// over-count in that case, but it is progress-reporting only).
 		_, err := client.StreamENATSV(ctx, ichsm.ENAQueryOptions{
 			Result: result,
 			Query:  batchQuery,
@@ -445,7 +448,7 @@ func fetchMatchGroupKeys(ctx context.Context, client *ichsm.Client, result strin
 				groups[groupKey] = true
 			}
 			return nil
-		})
+		}, true)
 		if err != nil {
 			return nil, err
 		}
@@ -471,6 +474,10 @@ func fetchMatchGroupRecords(ctx context.Context, client *ichsm.Client, result st
 	progress.printf("final records: fetching %d batch(es)%s\n", len(batches), progress.requestEstimate(len(batches)))
 	for batchIndex, batch := range batches {
 		query := andENAQueries(baseQuery, groupFilterQuery(groupBy, batch))
+		// retryable=true: seenRecords dedupes by identity, so replaying
+		// already-seen records after a transient mid-stream failure is safe
+		// (totalRecords may over-count in that case, but it is
+		// progress-reporting only).
 		_, err := client.StreamENATSV(ctx, ichsm.ENAQueryOptions{
 			Result: result,
 			Query:  query,
@@ -490,7 +497,7 @@ func fetchMatchGroupRecords(ctx context.Context, client *ichsm.Client, result st
 				records = append(records, record)
 			}
 			return nil
-		})
+		}, true)
 		if err != nil {
 			return nil, err
 		}

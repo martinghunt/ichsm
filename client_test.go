@@ -858,7 +858,7 @@ func TestStreamENATSV(t *testing.T) {
 	}, func(record Record) error {
 		records = append(records, record)
 		return nil
-	})
+	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -879,6 +879,76 @@ func TestStreamENATSV(t *testing.T) {
 	}
 	if got := records[1]["instrument_platform"]; got != nil {
 		t.Fatalf("instrument_platform = %#v, want nil", got)
+	}
+}
+
+func streamRetryTestClient(requests *int) *Client {
+	return &Client{
+		BaseURL: "https://example.test/",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			*requests++
+			if *requests == 1 {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       errorReadCloser{err: io.ErrUnexpectedEOF},
+					Header:     http.Header{},
+					Request:    req,
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("run_accession\nERR1\n")),
+				Header:     http.Header{},
+				Request:    req,
+			}, nil
+		})},
+		ENARequestsPerSecond:  -1,
+		MaxRequestRetries:     2,
+		RequestRetryBaseDelay: time.Millisecond,
+		RequestRetryMaxDelay:  time.Millisecond,
+	}
+}
+
+func TestStreamENATSVRetriesTransientErrorWhenRetryable(t *testing.T) {
+	requests := 0
+	client := streamRetryTestClient(&requests)
+
+	var records []Record
+	_, err := client.StreamENATSV(context.Background(), ENAQueryOptions{
+		Result: "run",
+		Query:  "tax_tree(2)",
+		Fields: []string{"run_accession"},
+	}, nil, func(record Record) error {
+		records = append(records, record)
+		return nil
+	}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
+	}
+	if len(records) != 1 || records[0]["run_accession"] != "ERR1" {
+		t.Fatalf("records = %#v, want one ERR1 record", records)
+	}
+}
+
+func TestStreamENATSVDoesNotRetryWhenNotRetryable(t *testing.T) {
+	requests := 0
+	client := streamRetryTestClient(&requests)
+
+	_, err := client.StreamENATSV(context.Background(), ENAQueryOptions{
+		Result: "run",
+		Query:  "tax_tree(2)",
+		Fields: []string{"run_accession"},
+	}, nil, func(record Record) error {
+		return nil
+	}, false)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
 	}
 }
 
