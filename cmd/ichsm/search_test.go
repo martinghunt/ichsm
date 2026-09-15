@@ -771,3 +771,34 @@ func TestWriteTSVAllFieldsUsesUnionOfRecordColumns(t *testing.T) {
 		t.Fatalf("stdout = %q, want %q", out.String(), want)
 	}
 }
+
+func TestWriteTSVMergesResultsWithDifferentDefaultFieldSets(t *testing.T) {
+	results := []ichsm.SearchResult{
+		{
+			InputAccession: "AAAA01000000",
+			Fields:         []string{"accession", "sample_accession", "sequence_version"},
+			Records: []ichsm.Record{
+				{"accession": "AAAA01000000", "sample_accession": "SAMN1", "sequence_version": "1"},
+			},
+		},
+		{
+			InputAccession: "BBBB01000000",
+			Fields:         []string{"accession", "wgs_set", "assembly_accession", "sample_accession", "run_accession", "sequence_version"},
+			Records: []ichsm.Record{
+				{"accession": "BBBB01000000", "wgs_set": "BBBB01", "assembly_accession": "GCA_1", "sample_accession": "SAMN2", "run_accession": "SRR1", "sequence_version": "1"},
+			},
+		},
+	}
+
+	var out bytes.Buffer
+	if err := writeTSV(&out, results, []string{"accession", "sample_accession", "sequence_version"}); err != nil {
+		t.Fatal(err)
+	}
+
+	const want = "input_accession\taccession\tsample_accession\tsequence_version\twgs_set\tassembly_accession\trun_accession\n" +
+		"AAAA01000000\tAAAA01000000\tSAMN1\t1\tnull\tnull\tnull\n" +
+		"BBBB01000000\tBBBB01000000\tSAMN2\t1\tBBBB01\tGCA_1\tSRR1\n"
+	if out.String() != want {
+		t.Fatalf("stdout = %q, want %q", out.String(), want)
+	}
+}

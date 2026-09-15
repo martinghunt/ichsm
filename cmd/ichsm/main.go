@@ -187,10 +187,7 @@ func executeSearch(cmd *cobra.Command, opts searchOptions) error {
 				return writeErr
 			}
 		} else {
-			rows, rowsErr := searchRows(results, fields)
-			if rowsErr != nil {
-				return rowsErr
-			}
+			rows := searchRows(results, fields)
 			if writeErr := writeRowsForOutputFormat(cmd.OutOrStdout(), rows, outfmt); writeErr != nil {
 				return writeErr
 			}
@@ -799,45 +796,79 @@ func writeJSON(out io.Writer, results []ichsm.SearchResult) error {
 }
 
 func writeTSV(out io.Writer, results []ichsm.SearchResult, requestedFields []string) error {
-	rows, err := searchRows(results, requestedFields)
-	if err != nil {
-		return err
-	}
+	rows := searchRows(results, requestedFields)
 	return writeRowsForOutputFormat(out, rows, outputFormatTSV)
 }
 
-func searchRows(results []ichsm.SearchResult, requestedFields []string) ([][]string, error) {
-	var columns []string
-	var rows [][]string
+func searchRows(results []ichsm.SearchResult, requestedFields []string) [][]string {
 	allFields := requestedAllFields(requestedFields)
+
+	var columns []string
+	nullMissing := allFields
 	if allFields {
 		columns = allRecordKeys(results)
+	} else {
+		var heterogeneous bool
+		columns, heterogeneous = unionResultFields(results)
+		nullMissing = heterogeneous
 	}
 
+	var rows [][]string
 	for _, result := range results {
 		if len(result.Records) == 0 {
 			continue
 		}
 
 		if rows == nil {
-			if !allFields {
-				columns = result.Fields
-			}
 			rows = append(rows, append([]string{"input_accession"}, columns...))
-		} else if !allFields && !sameStringSet(columns, result.Fields) {
-			return nil, fmt.Errorf("field set changed between results")
 		}
 
 		for _, record := range result.Records {
 			row := make([]string, 0, len(columns)+1)
 			row = append(row, result.InputAccession)
 			for _, column := range columns {
-				row = append(row, formatRecordColumn(record, column, allFields))
+				row = append(row, formatRecordColumn(record, column, nullMissing))
 			}
 			rows = append(rows, row)
 		}
 	}
-	return rows, nil
+	return rows
+}
+
+// unionResultFields returns the columns to use for a batch of search
+// results when not all fields were requested: the first non-empty result's
+// field order, extended with any additional fields seen in later results
+// (e.g. a batch of ambiguous "contig_set" accessions resolving to a mix of
+// WGS-set and TSA/TLS-set accessions, whose default field presets differ).
+// heterogeneous reports whether any two non-empty results had different
+// field sets, so callers can distinguish a field that's genuinely absent
+// from a record from one that's merely empty.
+func unionResultFields(results []ichsm.SearchResult) (columns []string, heterogeneous bool) {
+	seen := map[string]bool{}
+	var first []string
+	for _, result := range results {
+		if len(result.Records) == 0 {
+			continue
+		}
+		if first == nil {
+			first = result.Fields
+			columns = append([]string(nil), result.Fields...)
+			for _, field := range result.Fields {
+				seen[field] = true
+			}
+			continue
+		}
+		if !heterogeneous && !sameStringSet(first, result.Fields) {
+			heterogeneous = true
+		}
+		for _, field := range result.Fields {
+			if !seen[field] {
+				seen[field] = true
+				columns = append(columns, field)
+			}
+		}
+	}
+	return columns, heterogeneous
 }
 
 func allRecordKeys(results []ichsm.SearchResult) []string {
