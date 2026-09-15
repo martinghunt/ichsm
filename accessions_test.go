@@ -16,6 +16,8 @@ func TestIdentifyAccession(t *testing.T) {
 		{"AGQU00000000.1", "AGQU01", AccessionTypeContigSet, true},
 		{"AGQU000000000.2", "AGQU02", AccessionTypeContigSet, true},
 		{"ABCDEF000000000.3", "ABCDEF03", AccessionTypeContigSet, true},
+		{"AGQU00000000.42", "AGQU42", AccessionTypeContigSet, true},
+		{"AGQU00000000.100", "AGQU00000000", AccessionTypeSequence, true},
 		{"AGQU01", "AGQU01", AccessionTypeContigSet, true},
 		{"AGQU01000000", "AGQU01", AccessionTypeContigSet, true},
 		{"BAAHUD010000000", "BAAHUD01", AccessionTypeContigSet, true},
