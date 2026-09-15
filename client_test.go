@@ -1198,3 +1198,26 @@ func TestSearchRejectsMixedAccessionTypes(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestClientRateLimitersAreIndependentPerClient(t *testing.T) {
+	a := &Client{ENARequestsPerSecond: 5, NCBIRequestsPerSecond: 5}
+	b := &Client{ENARequestsPerSecond: 50, NCBIRequestsPerSecond: 50}
+
+	if a.enaLimiterPtr() == b.enaLimiterPtr() {
+		t.Fatal("distinct Clients must not share an ENA rate limiter")
+	}
+	if a.ncbiLimiterPtr() == b.ncbiLimiterPtr() {
+		t.Fatal("distinct Clients must not share an NCBI rate limiter")
+	}
+	if a.enaLimiterPtr() != a.enaLimiterPtr() {
+		t.Fatal("the same Client must reuse its own ENA rate limiter across calls")
+	}
+
+	var nilClient *Client
+	if nilClient.enaLimiterPtr() != nilClient.enaLimiterPtr() {
+		t.Fatal("nil Clients must share the default ENA rate limiter")
+	}
+	if nilClient.ncbiLimiterPtr() != nilClient.ncbiLimiterPtr() {
+		t.Fatal("nil Clients must share the default NCBI rate limiter")
+	}
+}

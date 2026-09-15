@@ -232,7 +232,7 @@ func (c *Client) requestENABrowserXML(ctx context.Context, accession string) ([]
 	if c != nil && c.BrowserBaseURL != "" {
 		baseURL = c.BrowserBaseURL
 	}
-	return c.requestWithBase(ctx, baseURL, accession, nil, "ENA Browser", &enaRequestLimiter, c.enaRateLimitInterval())
+	return c.requestWithBase(ctx, baseURL, accession, nil, "ENA Browser", c.enaLimiterPtr(), c.enaRateLimitInterval())
 }
 
 func parseENABrowserPublications(body []byte) (enaBrowserPublicationInfo, error) {

@@ -41,12 +41,13 @@ type Client struct {
 	NCBITool       string
 	HTTPClient     *http.Client
 
-	// ENARequestsPerSecond limits ENA Portal API requests per process. Zero uses
-	// the default of 25 requests per second; negative values disable the limiter.
+	// ENARequestsPerSecond limits ENA Portal API requests made by this Client.
+	// Zero uses the default of 25 requests per second; negative values disable
+	// the limiter.
 	ENARequestsPerSecond int
-	// NCBIRequestsPerSecond limits NCBI E-utilities requests per process. Zero
-	// uses the default of 3 requests per second, or 10 with an API key; negative
-	// values disable the limiter.
+	// NCBIRequestsPerSecond limits NCBI E-utilities requests made by this
+	// Client. Zero uses the default of 3 requests per second, or 10 with an API
+	// key; negative values disable the limiter.
 	NCBIRequestsPerSecond int
 	// MaxRequestRetries controls retries for HTTP 429 and transient 5xx responses.
 	// Zero uses the default; negative values disable retries.
@@ -56,6 +57,32 @@ type Client struct {
 	RequestRetryBaseDelay time.Duration
 	// RequestRetryMaxDelay caps exponential retry backoff. Zero uses the default.
 	RequestRetryMaxDelay time.Duration
+
+	enaLimiter  requestRateLimiter
+	ncbiLimiter requestRateLimiter
+}
+
+// defaultENALimiter and defaultNCBILimiter back a nil *Client, which is
+// supported as a zero-configuration default client. All nil clients share
+// the same fixed default rate, so sharing these limiters between them is
+// safe - unlike sharing a single limiter across distinctly configured
+// *Client values, which would pace them off each other's rate instead of
+// their own.
+var defaultENALimiter requestRateLimiter
+var defaultNCBILimiter requestRateLimiter
+
+func (c *Client) enaLimiterPtr() *requestRateLimiter {
+	if c == nil {
+		return &defaultENALimiter
+	}
+	return &c.enaLimiter
+}
+
+func (c *Client) ncbiLimiterPtr() *requestRateLimiter {
+	if c == nil {
+		return &defaultNCBILimiter
+	}
+	return &c.ncbiLimiter
 }
 
 const (
@@ -67,9 +94,6 @@ const (
 	defaultRetryBaseDelay              = 250 * time.Millisecond
 	defaultRetryMaxDelay               = 5 * time.Second
 )
-
-var enaRequestLimiter requestRateLimiter
-var ncbiRequestLimiter requestRateLimiter
 
 // SearchOptions configures a multi-accession search.
 type SearchOptions struct {
@@ -915,7 +939,7 @@ func (c *Client) request(ctx context.Context, path string, params url.Values) ([
 	if c != nil && c.BaseURL != "" {
 		baseURL = c.BaseURL
 	}
-	return c.requestWithBase(ctx, baseURL, path, params, "ENA", &enaRequestLimiter, c.enaRateLimitInterval())
+	return c.requestWithBase(ctx, baseURL, path, params, "ENA", c.enaLimiterPtr(), c.enaRateLimitInterval())
 }
 
 func (c *Client) requestStream(ctx context.Context, path string, params url.Values, handle func(io.Reader) error, retryable bool) error {
@@ -923,7 +947,7 @@ func (c *Client) requestStream(ctx context.Context, path string, params url.Valu
 	if c != nil && c.BaseURL != "" {
 		baseURL = c.BaseURL
 	}
-	return c.requestStreamWithBase(ctx, baseURL, path, params, "ENA", &enaRequestLimiter, c.enaRateLimitInterval(), handle, retryable)
+	return c.requestStreamWithBase(ctx, baseURL, path, params, "ENA", c.enaLimiterPtr(), c.enaRateLimitInterval(), handle, retryable)
 }
 
 func (c *Client) requestWithBase(ctx context.Context, baseURL string, path string, params url.Values, serviceName string, limiter *requestRateLimiter, rateLimitInterval time.Duration) ([]byte, error) {

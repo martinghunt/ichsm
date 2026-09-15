@@ -309,5 +309,5 @@ func (c *Client) requestNCBI(ctx context.Context, path string, params url.Values
 	if c != nil && c.NCBIBaseURL != "" {
 		baseURL = c.NCBIBaseURL
 	}
-	return c.requestWithBase(ctx, baseURL, path, params, "NCBI", &ncbiRequestLimiter, c.ncbiRateLimitInterval())
+	return c.requestWithBase(ctx, baseURL, path, params, "NCBI", c.ncbiLimiterPtr(), c.ncbiRateLimitInterval())
 }
