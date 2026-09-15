@@ -142,6 +142,14 @@ func sanitizeTabularRow(row []string) []string {
 }
 
 func sanitizeTabularCell(value string) string {
+	cleaned := collapseTabularWhitespace(value)
+	if startsWithSpreadsheetFormulaTrigger(cleaned) {
+		cleaned = "'" + cleaned
+	}
+	return cleaned
+}
+
+func collapseTabularWhitespace(value string) string {
 	var builder strings.Builder
 	changed := false
 	lastWasSpace := false
@@ -162,4 +170,19 @@ func sanitizeTabularCell(value string) string {
 		return value
 	}
 	return strings.TrimSpace(builder.String())
+}
+
+// startsWithSpreadsheetFormulaTrigger reports whether value would be
+// interpreted as a formula by spreadsheet applications (Excel, LibreOffice,
+// Google Sheets) importing TSV/table output, per OWASP CSV injection guidance.
+func startsWithSpreadsheetFormulaTrigger(value string) bool {
+	if value == "" {
+		return false
+	}
+	switch value[0] {
+	case '=', '+', '-', '@':
+		return true
+	default:
+		return false
+	}
 }

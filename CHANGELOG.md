@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add `ichsm update` to check the latest GitHub release, verify the matching archive checksum, and replace the installed binary when a newer release is available.
 
+### Security
+- Neutralize leading `=`, `+`, `-`, and `@` characters in TSV/table cell values to prevent spreadsheet formula injection (CSV injection) when record text originating from ENA/NCBI is opened in Excel, LibreOffice, or Google Sheets.
+
 ## [0.7.0] - 2026-06-26
 
 ### Added
